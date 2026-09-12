@@ -1,5 +1,7 @@
 # F — Feindschaft. Aber mit Blumen.
 
+Aktueller Stand: **Update 4 / Version 1.1.0**. Die genaue Änderungsübersicht, bekannte Grenzen und die Anleitung für das bestehende GitHub-/Render-Projekt stehen in [UPDATE-V4.md](UPDATE-V4.md). Dieses Paket ist noch nicht auf Render veröffentlicht.
+
 Eine responsive Website für humorvolle Sprüche und freiwillige Wortduelle. Gestaltung in gedämpftem Anthrazit, verwaschenem Rosé und grauem Salbei, mit selbst gezeichneten SVG-Blumenfiguren. Die Website enthält keine fremden Markenbilder und lädt keine externen Schriftarten oder Tracker.
 
 ## Enthalten
@@ -11,7 +13,12 @@ Eine responsive Website für humorvolle Sprüche und freiwillige Wortduelle. Ges
 - Likes und Dislikes auf Sprüche und Kommentare; eine Bewertung pro Konto und Ziel
 - Virtuelle Währung „Beleidigungen“: täglich einmal 300 Punkte abholen (Kalendertag Europe/Berlin)
 - Pro erhaltenem Like +2, pro erhaltenem Dislike −5; Änderungen und Rücknahmen wirken auf den aktuellen Punktestand
-- Noch keine Ausgaben, kein Geldwert, keine Käufe; ein negativer Punktestand erzeugt keine Geldschuld
+- Foto-Uploads und Foto-Freischaltungen mit virtuellen Punkten, 50-%-Anteil für die hochladende Person und nachvollziehbaren Buchungen; keine echten Geldzahlungen
+- Kategorien sind verpflichtend auszuwählen und kostenlos anzulegen
+- Chat-Fotos sind kostenlos; einmaliger Zugriff der empfangenden Person für 20 Sekunden
+- Drei kostenlose Einzelchatspiele: Tic-Tac-Toe, Vier gewinnt, Zahlenduell, jeweils mit Einladung und serverseitigen Zugregeln
+- Extras für eigene Texte, Lernmaterialien und Code-Dateien; separate Clips- und Musikfilter
+- Meldungen und Moderation mit Zugriff auf den jeweils gemeldeten Inhalt bzw. den Chat der betroffenen beiden Personen
 - Freiwillige Angaben zu Geschlecht, Queer-Identität und Orientierung; privat voreingestellt und jederzeit änderbar
 - Profilansichten für andere angemeldete Personen zeigen nur freigegebene Identitätsangaben
 - Anklickbare Ranglisten: Beliebt (Likes minus Dislikes), Meistgelikt und Diskutiert (Antworten in den letzten 24 Stunden)
@@ -20,9 +27,9 @@ Eine responsive Website für humorvolle Sprüche und freiwillige Wortduelle. Ges
 - Gegenseitiger Zugriffsschutz und Blockierungen
 - Einzelne Beiträge ausblenden und Profile wieder entblockieren
 - Feindschaft Plus: sieben kostenlose Tage, Profilabzeichen und Spruchsammlung
-- Automatisches Ende der Probephase, keine Zahlungsanbindung oder Abbuchungen
+- Automatisches Ende der Plus-Probephase; keine Echtgeld-Zahlungsanbindung
 
-Die fünf Beispielprofile und ihre Beispiel-Likes sind in der Oberfläche markiert. Diese Profile sind keine echten Nutzer, können sich nicht anmelden und können keine Chat-Anfragen annehmen. Neue Konten, Beiträge und Interaktionen werden in der Serverversion gemeinsam auf dem Server gespeichert. Die HTML-Vorschau simuliert die Funktionen ausschließlich lokal.
+Die fünf Beispielprofile und ihre Beispiel-Likes sind in der Oberfläche markiert. Diese Profile sind keine echten Nutzer, können sich nicht anmelden und können keine Chat-Anfragen annehmen. Neue Konten, Beiträge und Interaktionen werden in der Serverversion gemeinsam auf dem Server gespeichert. Diese Version benötigt den Node-Server, nicht nur eine lokal geöffnete HTML-Datei.
 
 ## Lokal starten
 
@@ -40,29 +47,25 @@ Danach `http://localhost:3000` im Browser öffnen. Ein anderer Port kann mit `PO
 npm test
 ```
 
-Die Tests verwenden eine eigene temporäre Datenbank und getrennte Sitzungen. Sie prüfen Anmeldung, fehlende Zustimmung, doppelte Namen, falsche Passwörter, Rechte für Beiträge, Blumen, Antworten, Plus, private Nachrichten, fehlendes Einverständnis, fremden Zugriff, Blockierungen, Ausblenden und Abmelden.
+Die Tests verwenden temporäre Datenbanken und getrennte Sitzungen. Sie prüfen Anmeldung, Profile, Kategorien, Foto-Upload, tatsächliche Bildantworten, Kosten, Einnahmen, doppelte Käufe, Fristen, Rechte, Chatspiele, Extras, Moderationszugriffe und UI-Logik. Die Tests verändern keine Nutzerdaten auf deinem laufenden Server.
 
 Die JavaScript-Dateien wurden syntaktisch geprüft und die Funktionstests sind bestanden. Eine visuelle Browserprüfung konnte in der Erstellungsumgebung nicht durchgeführt werden, da kein verfügbarer Browser vorhanden war. Die responsive Darstellung sollte vor einer Veröffentlichung auf echten Mobilgeräten geprüft werden.
 
 ## Aktueller Betriebsstand
 
-Diese Lieferung ist eine private Testversion mit funktionierendem Backend. Die verwaltete Vorschau wurde gestartet; eine dauerhafte externe Veröffentlichung oder eigene Domain wurde nicht eingerichtet. Die private Vorschau ist kein dauerhaftes Hosting und keine garantierte Datensicherung.
+Diese Lieferung ist ein Update für die bestehende Serverversion mit SQLite. Eine Veröffentlichung des Updates in deinem Render-Konto ist noch nicht erfolgt. Der bisherige dauerhafte Datenpfad muss unverändert bleiben, damit vorhandene Konten und Inhalte weiterverwendet werden.
 
-Die App besitzt selbst noch kein Einladungs- oder Betreiber-Administrationssystem. Die Zugriffsbeschränkung der privaten Vorschau liegt bei der Vorschauumgebung. Bevor dieselbe App auf einem Server betrieben wird, muss ein privater Zugang vorgeschaltet werden, wenn sie weiterhin nur für eine geschlossene Testrunde bestimmt ist.
+Das ausgewählte Konto Lima erhält beim Serverstart den Moderationszugriff. Ein technisches Einladungs- oder Zutrittssystem für die gesamte Website ist nicht enthalten. „Testversion“ in der Oberfläche allein schützt eine öffentliche URL nicht vor Zugriffen.
 
-Für einen öffentlichen Start sind insbesondere ein dauerhaftes HTTPS-Hosting mit persistentem Datenverzeichnis und Backups, eine Kontowiederherstellung und Kontolöschung, betreute Moderation und eine zum tatsächlichen Betreiber passende Datenschutz- und Anbieterinformation zu ergänzen. Bezahlte Abonnements sind bewusst noch nicht implementiert, da keine Preise oder Zahlungsanbieter festgelegt wurden.
+Vor einem breiten öffentlichen Einsatz sind insbesondere Sicherungs- und Löschkonzept, Kontowiederherstellung und Kontolöschung, eine tatsächlich betreute Moderation und passende Betreiber-/Datenschutzinformationen zu vervollständigen. Echte bezahlte Abonnements sind nicht implementiert.
 
 Nachrichten sind durch serverseitige Zugriffsrechte geschützt, aber nicht Ende-zu-Ende-verschlüsselt. Nutze für die Testversion Spitznamen, ein separates Testpasswort und keine vertraulichen Inhalte. Im Archiv befinden sich keine Nutzerdaten, Sitzungen oder Passwörter.
 
 
-## Offline-Vorschau erzeugen
+## Hinweise zu vorhandenen Daten
 
-```sh
-node scripts/build-preview.mjs
-```
+Bestehende Konten und Beiträge werden durch additive Datenbankänderungen erhalten. Vorhandene Foto-Freischaltungen bleiben gültig; alte Uploads werden nicht nachträglich belastet. Bereits gelöschte Bilddateien kann dieses Paket nicht wiederherstellen.
 
-Die erzeugte `feindschaft-v2.html` enthält alle Grafiken, Styles und Skripte und lässt sich direkt in Safari öffnen. Sie stellt keine Netzwerkverbindungen her. Die Vorschau bietet keine echten Benutzerkonten, Nachrichten oder Zahlungen. Freiwillige Identitätsangaben können zum Testen frei erfunden werden.
+Die Ranglisten berücksichtigen bis zu 200 sichtbare Feed-Beiträge und bis zu 300 sichtbare Kommentare je Beitrag. Beim Löschen eines eigenen Spruchs fallen dessen Bewertungen und die daraus abgeleiteten Punkte weg. Historische Foto-Buchungen bleiben nachvollziehbar.
 
-Im Punktekasten gibt es einen ausdrücklich beschrifteten Demo-Bereich für eingehende Bewertungen. Nach einem eigenen Testspruch kann eine erfundene Person simuliert werden, deren Bewertung zwischen Like, Dislike und keiner Bewertung wechselt. Es wird keine echte Nutzeraktivität vorgetäuscht.
-
-Die erweiterten Tests prüfen auch gleichzeitige Tagesabholungen, ersetzte und zurückgenommene Bewertungen, Minuspunkte, Kommentare mit Elternkommentar, falsche Kommentarzuordnungen sowie die Sichtbarkeit freiwilliger Identitätsangaben. Die Ranglisten berücksichtigen in der aktuellen Testversion die letzten 200 für die betrachtende Person sichtbaren Sprüche und bis zu 300 sichtbare Kommentare je Spruch. Beim Löschen eines Spruchs fallen auch dessen Bewertungen und die Punkte aus den zugehörigen Kommentaren weg. Bestehende Konten und Beiträge werden durch additive Datenbankänderungen erhalten.
+Die alten Offline-Vorschau-Skripte sind nicht Bestandteil dieses Update-Pakets. Neue Fotos, Buchungen und Spiele sollen mit dem echten lokalen Node-Server getestet werden.
