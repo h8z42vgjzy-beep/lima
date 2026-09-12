@@ -17,11 +17,11 @@ test('Registration, feed, reactions, chat consent, privacy, blocking and trial l
     assert.equal((await anon.call('post',{body:'Hello world'})).status,401);
     assert.equal((await anon.call('register',{name:'NoConsent',password:'TestPassword12',consent:false})).status,400);
     assert.equal((await anon.call('register',{name:'NoHeader',password:'TestPassword12',consent:true},false)).status,403);
-    const a=await alice.call('register',{name:'AliceTest',password:'TestPassword12',consent:true});
-    const b=await bob.call('register',{name:'BobTest',password:'OtherPassword12',consent:true});
-    const e=await eve.call('register',{name:'EveTest',password:'ThirdPassword12',consent:true});
+    const a=await alice.call('register',{name:'AliceTest',password:'TestPassword12',consent:true,adult:true});
+    const b=await bob.call('register',{name:'BobTest',password:'OtherPassword12',consent:true,adult:true});
+    const e=await eve.call('register',{name:'EveTest',password:'ThirdPassword12',consent:true,adult:true});
     assert.equal(a.status,200);assert.equal(b.status,200);assert.equal(e.status,200);assert.match(a.cookie,/HttpOnly/);assert.match(a.cookie,/SameSite=Lax/);
-    assert.equal((await anon.call('register',{name:'alicetest',password:'TestPassword12',consent:true})).status,409);
+    assert.equal((await anon.call('register',{name:'alicetest',password:'TestPassword12',consent:true,adult:true})).status,409);
     assert.equal((await anon.call('login',{name:'AliceTest',password:'WrongPassword12'})).status,401);
     const login=client();assert.equal((await login.call('login',{name:'AliceTest',password:'TestPassword12'})).status,200);
     assert.equal((await login.call('me')).data.user.name,'AliceTest');

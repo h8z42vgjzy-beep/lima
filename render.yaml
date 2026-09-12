@@ -18,7 +18,9 @@ services:
         value: production
       - key: F_DATA_DIR
         value: /var/data/feindschaft
+      - key: F_STORAGE_BYTES
+        value: "10737418240"
     disk:
       name: feindschaft-data
       mountPath: /var/data
-      sizeGB: 1
+      sizeGB: 10
