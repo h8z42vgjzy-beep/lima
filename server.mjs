@@ -84,7 +84,7 @@ const server=http.createServer(async(req,res)=>{
   try {
     if(!url.pathname.startsWith('/api/')){
       const item=staticFiles[url.pathname];if(!item||!['GET','HEAD'].includes(req.method)){res.writeHead(404);return res.end('Nicht gefunden.');}
-      res.writeHead(200,{'Content-Type':item[1],'Cache-Control':'no-cache'});return res.end(req.method==='HEAD'?'':readFileSync(path.join(staticRoot,item[0]))));
+      res.writeHead(200,{'Content-Type':item[1],'Cache-Control':'no-cache'});return res.end(req.method==='HEAD'?'':readFileSync(path.join(staticRoot,item[0])));
     }
     const cookie=(req.headers.cookie||'').split(';').map(s=>s.trim()).find(s=>s.startsWith('f_session='))?.slice(10);
     const user=cookie?one('SELECT u.* FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token=? AND s.expires>?',digest(cookie),now()):null;
