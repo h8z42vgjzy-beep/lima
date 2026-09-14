@@ -134,7 +134,7 @@ test('Mandatory category, priced uploads, atomic split, real photo bytes and ide
   assert.equal((await alice.raw('/media/'+expired.data.mediaId)).status,404);
   await bob.call('block',{target:alice.id});assert.equal((await bob.raw('/media/'+id)).status,404);
   assert.equal((await bob.call('unlock',{media:id,expectedPrice:5})).status,404);
-  for(const route of ['/','/features.js','/features.css','/app.js'])assert.equal((await anon.raw(route)).status,200);
+  for(const route of ['/','/features.js','/features.css','/app.js','/dino-client.js','/discovery-effects.js','/action.css'])assert.equal((await anon.raw(route)).status,200);
   assert.equal((await anon.raw('/server.mjs')).status,404);
   assert.equal(h.errors(),'');
 });

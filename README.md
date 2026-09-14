@@ -1,6 +1,6 @@
 # F — Feindschaft. Aber mit Blumen.
 
-Aktueller Stand: **Update 5 / Version 1.2.0**. Die Änderungsübersicht, Prüfungen und Upload-Anleitung stehen in [UPDATE-V5.md](UPDATE-V5.md). Die vorherigen Änderungen sind in [UPDATE-V4.md](UPDATE-V4.md) dokumentiert. Dieses Paket ist noch nicht auf Render veröffentlicht.
+Aktueller Stand: **Update 6 / Version 1.3.0**. Die neuen Effekte und die Upload-Anleitung stehen in [UPDATE-V6.md](UPDATE-V6.md). Die vorherigen Änderungen sind in [UPDATE-V5.md](UPDATE-V5.md) und [UPDATE-V4.md](UPDATE-V4.md) dokumentiert. Dieses Paket ist noch nicht auf Render veröffentlicht.
 
 Eine responsive Website für humorvolle Sprüche und freiwillige Wortduelle. Dunkle Gestaltung mit violetten und grünen Akzenten, animierten SVG-Blumen und einem Live-Dino-Duell im Chat. Die Website lädt keine externen Schriftarten oder Tracker.
 
@@ -18,6 +18,7 @@ Eine responsive Website für humorvolle Sprüche und freiwillige Wortduelle. Dun
 - Chat-Fotos sind kostenlos; einmaliger Zugriff der empfangenden Person für 20 Sekunden
 - Vier kostenlose Einzelchatspiele: ein neuer Live-Dino-Lauf, Tic-Tac-Toe, Vier gewinnt und Zahlenduell, jeweils mit Einladung und serverseitigen Regeln
 - Fester Musikplayer außerhalb des Feeds, Abspielposition, Pause und Wiederherstellung nach Netzwerkfehlern
+- Reaktive Dino-Effekte und vier lokal gespeicherte Seiteneffekte zum Entdecken; ohne Guthabenwirkung
 - Extras für eigene Texte, Lernmaterialien und Code-Dateien; separate Clips- und Musikfilter
 - Meldungen und Moderation mit Zugriff auf den jeweils gemeldeten Inhalt bzw. den Chat der betroffenen beiden Personen
 - Freiwillige Angaben zu Geschlecht, Queer-Identität und Orientierung; privat voreingestellt und jederzeit änderbar
