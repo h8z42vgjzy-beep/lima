@@ -174,37 +174,55 @@ async function loadChatMessages() {
   if (atBottom) box.scrollTop = box.scrollHeight;
 }
 
+const chessPieces = {K:'♔',Q:'♕',R:'♖',B:'♗',N:'♘',P:'♙',k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'};
+function chessBoard(g, ownTurn) {
+  const white = g.creator === user.id;
+  const order = Array.from({length:64},(_,i)=>white?i:63-i);
+  const ownSide = white ? piece => piece && piece === piece.toUpperCase() : piece => piece && piece === piece.toLowerCase();
+  const file = square => 'abcdefgh'[square%8], rank = square => 8-Math.floor(square/8);
+  return `<div class="chess-wrap"><div class="chess-board" data-chess-board="${g.id}" role="grid" aria-label="Schachbrett, ${white?'Weiß':'Schwarz'} unten">${order.map(square=>{
+    const piece=g.state.board[square],x=square%8,y=Math.floor(square/8),last=g.state.lastMove&&(g.state.lastMove.from===square||g.state.lastMove.to===square);
+    return `<button type="button" class="chess-square ${(x+y)%2?'dark':'light'}${last?' last-move':''}" data-action="chess-square" data-id="${g.id}" data-version="${g.version}" data-square="${square}" data-own="${ownSide(piece)?'1':'0'}" role="gridcell" aria-label="${file(square)}${rank(square)}${piece?' '+chessPieces[piece]:' frei'}" ${!ownTurn?'disabled':''}><span aria-hidden="true">${piece?chessPieces[piece]:''}</span>${((white&&x===0)||(!white&&x===7))?`<small>${rank(square)}</small>`:''}${((white&&y===7)||(!white&&y===0))?`<i>${file(square)}</i>`:''}</button>`;
+  }).join('')}</div><p class="chess-help">${ownTurn?'Tippe zuerst deine Figur und danach das Zielfeld.':'Die Stellung bleibt gespeichert. Du kannst später zurückkommen.'}${g.state.check?' · SCHACH!':''}</p></div>`;
+}
+
+function renderGameCard(g, catalog, nameOf) {
+  const ownTurn = g.status === 'active' && g.turn === user.id;
+  const name = catalog.find(c => c.type === g.type)?.name || g.type;
+  const status = g.status === 'invited' ? `${nameOf(g.creator)} lädt zum Spielen ein.` : g.status === 'active' ? g.type === 'dino-run' ? 'Euer Live-Duell. Beide spielen gleichzeitig.' : `${nameOf(g.turn)} ${ownTurn ? 'bist' : 'ist'} am Zug${g.type==='chess'?' · ohne Zeitlimit':''}.` : g.status === 'finished' ? g.winner ? `${nameOf(g.winner)} ${g.winner === user.id ? 'hast' : 'hat'} gewonnen.` : 'Unentschieden.' : g.status === 'declined' ? 'Einladung abgelehnt.' : 'Spiel beendet.';
+  const button = (action,label) => `<button class="mini-button" data-action="game-action" data-id="${g.id}" data-version="${g.version}" data-game-action="${action}">${label}</button>`;
+  let board='';
+  if(g.status!=='invited'){
+    if(g.type==='dino-run')board=`<div id="dino-stage" class="dino-stage"><div class="dino-live-badge"><i></i> LIVE</div><div class="dino-flash" data-dino-flash aria-hidden="true"></div><canvas width="720" height="348" tabindex="0" role="img" aria-label="Dino-Duell mit zwei Spuren. Leertaste oder Pfeil hoch zum Springen."></canvas><p data-dino-status role="status">Runde wird geladen …</p><button type="button" class="button dark full dino-jump" data-dino-jump disabled>↑ SPRINGEN</button><small>Tippen · Leertaste · Pfeil hoch. Knapp über Kakteen springen baut eine Effektserie auf. Wer länger durchhält, gewinnt.</small></div>`;
+    else if(g.type==='chess')board=chessBoard(g,ownTurn);
+    else if(g.type==='tic-tac-toe')board=`<div class="game-board ttt-board">${g.state.board.map((mark,cell)=>`<button class="game-cell mark-${mark}" data-action="game-action" data-game-action="move" data-id="${g.id}" data-version="${g.version}" data-cell="${cell}" aria-label="Feld ${cell+1}${mark?': '+(mark===1?'X':'O'):', frei'}" ${!ownTurn||mark?'disabled':''}>${mark===1?'X':mark===2?'O':'·'}</button>`).join('')}</div>`;
+    else if(g.type==='connect-four')board=`<div class="connect-controls">${Array.from({length:7},(_,column)=>`<button class="mini-button" data-action="game-action" data-game-action="move" data-id="${g.id}" data-version="${g.version}" data-column="${column}" aria-label="Stein in Spalte ${column+1}" ${!ownTurn||g.state.board[column]?'disabled':''}>${column+1} ↓</button>`).join('')}</div><div class="game-board connect-board" role="img" aria-label="Vier-gewinnt-Spielstand">${g.state.board.map((mark,i)=>`<span class="game-dot mark-${mark}" title="Zeile ${Math.floor(i/7)+1}, Spalte ${i%7+1}: ${mark||'frei'}">${mark===1?'●':mark===2?'○':'·'}</span>`).join('')}</div>`;
+    else board=`<p>Bereich: <strong>${g.state.low}–${g.state.high}</strong>${g.state.answer?` · Gesuchte Zahl: ${g.state.answer}`:''}</p><ol class="guess-history">${g.state.guesses.map(x=>`<li>${esc(nameOf(x.mark===1?g.creator:g.opponent))}: ${x.guess} → ${esc(x.hint)}</li>`).join('')}</ol>${ownTurn?`<form id="guess-form" data-id="${g.id}" data-version="${g.version}"><label class="field" for="game-guess">Deine Zahl</label><input id="game-guess" name="guess" type="number" min="${g.state.low}" max="${g.state.high}" step="1" required><button class="button dark small">Raten</button></form>`:''}`;
+  }
+  const controls=g.status==='invited'&&g.opponent===user.id?button('accept','Annehmen')+button('decline','Ablehnen'):g.status==='active'?g.type==='chess'?button('resign','Aufgeben'):button('cancel','Spiel beenden'):g.status==='invited'?button('cancel','Einladung zurückziehen'):'';
+  const roles=g.type==='chess'?`${esc(nameOf(g.creator))}: Weiß · ${esc(nameOf(g.opponent))}: Schwarz · dauerhaft gespeichert`:g.type==='dino-run'?'Dein Dino ist grün. Der andere ist lila.':`${esc(nameOf(g.creator))}: X / ● · ${esc(nameOf(g.opponent))}: O / ○`;
+  return `<div class="game-card ${g.type==='chess'?'chess-card':''}"><h3>${esc(name)}</h3><p role="status">${esc(status)}</p>${controls}${board}<p class="form-hint">${roles} · kostenlos</p></div>`;
+}
+
 async function loadChatGames(expand = false) {
   if (!chatId || modalView !== 'chat') return;
   const request = chatId, data = await api('games?request=' + request);
   if (request !== chatId || modalView !== 'chat') return;
   const container = $('#chat-games'); if (!container) return;
   if (expand) gamesVisible = !gamesVisible;
-  const active = data.games.find(g => ['invited', 'active'].includes(g.status));
-  const button = $('#games-toggle'); if (button) { button.textContent = active ? 'Spiele · Runde läuft' : 'Spiele · kostenlos'; button.setAttribute('aria-expanded', String(gamesVisible || !!active)); }
-  container.hidden = !gamesVisible && !active;
-  const newest = active || data.games[0];
+  const active = data.games.filter(g => ['invited', 'active'].includes(g.status));
+  const button = $('#games-toggle'); if (button) { button.textContent = active.length ? `Spiele · ${active.length} offen` : 'Spiele · kostenlos'; button.setAttribute('aria-expanded', String(gamesVisible || !!active.length)); }
+  container.hidden = !gamesVisible && !active.length;
+  const shown = active.length ? active : data.games.slice(0,1);
   const signature = JSON.stringify([data.games.map(g => g.type === 'dino-run' && g.status === 'active' ? {id:g.id,version:g.version,status:g.status} : g), gamesVisible]);
   if (container.dataset.version === signature) return; container.dataset.version = signature;
   const nameOf = id => id === user.id ? 'Du' : chatPerson.name;
-  const buttons = (g, action, label) => `<button class="mini-button" data-action="game-action" data-id="${g.id}" data-version="${g.version}" data-game-action="${action}">${label}</button>`;
-  let gameHTML = '';
-  if (newest) {
-    const g = newest, ownTurn = g.status === 'active' && g.turn === user.id;
-    const name = data.catalog.find(c => c.type === g.type)?.name || g.type;
-    const status = g.status === 'invited' ? `${nameOf(g.creator)} lädt zum Spielen ein.` : g.status === 'active' ? g.type === 'dino-run' ? 'Euer Live-Duell. Beide spielen gleichzeitig.' : `${nameOf(g.turn)} ${ownTurn ? 'bist' : 'ist'} am Zug.` : g.status === 'finished' ? g.winner ? `${nameOf(g.winner)} ${g.winner === user.id ? 'hast' : 'hat'} gewonnen.` : 'Unentschieden.' : g.status === 'declined' ? 'Einladung abgelehnt.' : 'Spiel beendet.';
-    let board = '';
-    if (g.status !== 'invited') {
-      if (g.type === 'dino-run') board = `<div id="dino-stage" class="dino-stage"><div class="dino-live-badge"><i></i> LIVE</div><div class="dino-flash" data-dino-flash aria-hidden="true"></div><canvas width="720" height="348" tabindex="0" role="img" aria-label="Dino-Duell mit zwei Spuren. Leertaste oder Pfeil hoch zum Springen."></canvas><p data-dino-status role="status">Runde wird geladen …</p><button type="button" class="button dark full dino-jump" data-dino-jump disabled>↑ SPRINGEN</button><small>Tippen · Leertaste · Pfeil hoch. Knapp über Kakteen springen baut eine Effektserie auf. Wer länger durchhält, gewinnt.</small></div>`;
-      else if (g.type === 'tic-tac-toe') board = `<div class="game-board ttt-board">${g.state.board.map((mark, cell) => `<button class="game-cell mark-${mark}" data-action="game-action" data-game-action="move" data-id="${g.id}" data-version="${g.version}" data-cell="${cell}" aria-label="Feld ${cell + 1}${mark ? ': ' + (mark === 1 ? 'X' : 'O') : ', frei'}" ${!ownTurn || mark ? 'disabled' : ''}>${mark === 1 ? 'X' : mark === 2 ? 'O' : '·'}</button>`).join('')}</div>`;
-      else if (g.type === 'connect-four') board = `<div class="connect-controls">${Array.from({ length: 7 }, (_, column) => `<button class="mini-button" data-action="game-action" data-game-action="move" data-id="${g.id}" data-version="${g.version}" data-column="${column}" aria-label="Stein in Spalte ${column + 1}" ${!ownTurn || g.state.board[column] ? 'disabled' : ''}>${column + 1} ↓</button>`).join('')}</div><div class="game-board connect-board" role="img" aria-label="Vier-gewinnt-Spielstand">${g.state.board.map((mark, i) => `<span class="game-dot mark-${mark}" title="Zeile ${Math.floor(i/7)+1}, Spalte ${i%7+1}: ${mark || 'frei'}">${mark === 1 ? '●' : mark === 2 ? '○' : '·'}</span>`).join('')}</div>`;
-      else board = `<p>Bereich: <strong>${g.state.low}–${g.state.high}</strong>${g.state.answer ? ` · Gesuchte Zahl: ${g.state.answer}` : ''}</p><ol class="guess-history">${g.state.guesses.map(x => `<li>${esc(nameOf(x.mark === 1 ? g.creator : g.opponent))}: ${x.guess} → ${esc(x.hint)}</li>`).join('')}</ol>${ownTurn ? `<form id="guess-form" data-id="${g.id}" data-version="${g.version}"><label class="field" for="game-guess">Deine Zahl</label><input id="game-guess" name="guess" type="number" min="${g.state.low}" max="${g.state.high}" step="1" required><button class="button dark small">Raten</button></form>` : ''}`;
-    }
-    gameHTML = `<div class="game-card"><h3>${esc(name)}</h3><p role="status">${esc(status)}</p>${g.status === 'invited' && g.opponent === user.id ? buttons(g, 'accept', 'Annehmen') + buttons(g, 'decline', 'Ablehnen') : ''}${board}${['invited','active'].includes(g.status) ? buttons(g, 'cancel', 'Spiel beenden') : ''}<p class="form-hint">${g.type === 'dino-run' ? 'Dein Dino ist grün. Der andere ist lila.' : `${esc(nameOf(g.creator))}: X / ● · ${esc(nameOf(g.opponent))}: O / ○`} · kostenlos</p></div>`;
-  }
+  const gameHTML = shown.map(g=>renderGameCard(g,data.catalog,nameOf)).join('');
+  const hasChess=active.some(g=>g.type==='chess'),hasQuick=active.some(g=>g.type!=='chess');
+  const available=data.catalog.filter(g=>g.type==='chess'?!hasChess:!hasQuick);
   globalThis.dinoLive?.stop();
-  container.innerHTML = `<p class="form-hint">Nur für euch beide. Kostenlos, ohne Einsätze und ohne Einfluss auf das Guthaben.</p>${gameHTML}${!active ? `<div class="game-picker">${data.catalog.map(g => `<button class="game-choice" data-action="game-create" data-type="${g.type}"><strong>${esc(g.name)}</strong><span>${esc(g.description)}</span><small>Einladen ↗</small></button>`).join('')}</div>` : ''}`;
-  if (newest?.type === 'dino-run' && newest.status !== 'invited') globalThis.dinoLive?.mount($('#dino-stage'),newest,user.id,chatPerson.name,api);
+  container.innerHTML = `<p class="form-hint">Nur für euch beide. Kostenlos, ohne Einsätze und ohne Einfluss auf das Guthaben.</p>${gameHTML}${available.length?`<div class="game-picker">${available.map(g=>`<button class="game-choice" data-action="game-create" data-type="${g.type}"><strong>${esc(g.name)}</strong><span>${esc(g.description)}</span><small>Einladen ↗</small></button>`).join('')}</div>`:''}`;
+  const dino=shown.find(g=>g.type==='dino-run'&&g.status!=='invited');if(dino)globalThis.dinoLive?.mount($('#dino-stage'),dino,user.id,chatPerson.name,api);
 }
 async function createChatGame(type) { await api('game-create', { request: chatId, type }); gamesVisible = true; await loadChatGames(); }
 async function sendGameAction(dataset) {
@@ -212,6 +230,16 @@ async function sendGameAction(dataset) {
   if (dataset.cell !== undefined) input.cell = Number(dataset.cell);
   if (dataset.column !== undefined) input.column = Number(dataset.column);
   try { await api('game-action', input); } finally { await loadChatGames(); }
+}
+async function chooseChessSquare(dataset) {
+  const board=document.querySelector(`[data-chess-board="${Number(dataset.id)}"]`);if(!board)return;
+  const current=board.dataset.from;
+  if(current===undefined){
+    if(dataset.own!=='1'){toast('Wähle zuerst eine deiner eigenen Figuren.');return;}
+    board.dataset.from=dataset.square;board.querySelectorAll('.chess-square').forEach(x=>x.classList.toggle('selected',x.dataset.square===dataset.square));return;
+  }
+  if(current===dataset.square){delete board.dataset.from;board.querySelectorAll('.chess-square').forEach(x=>x.classList.remove('selected'));return;}
+  try{await api('game-action',{game:Number(dataset.id),version:Number(dataset.version),action:'move',from:Number(current),to:Number(dataset.square)});}finally{await loadChatGames();}
 }
 
 async function showExtras(space = '') {

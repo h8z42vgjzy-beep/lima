@@ -39,4 +39,7 @@ test('UI wiring: mandatory category, media helpers load before app, games and ex
   assert.match(html,/<select id="post-category"[^>]*required/);
   assert.ok(html.indexOf('src="/features.js"')<html.indexOf('src="/app.js"'));
   assert.match(html,/data-action="games"/);assert.match(html,/data-action="extras"/);
+  assert.match(html,/Langzeit-Schach/);
+  const features=readFileSync(new URL('public/features.js',import.meta.url),'utf8');
+  assert.match(features,/data-action="chess-square"/);assert.match(features,/ohne Zeitlimit/);
 });

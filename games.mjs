@@ -1,8 +1,10 @@
 import { randomInt } from 'node:crypto';
 import { initialDinoState } from './dino.mjs';
+import { initialChessState, applyChessMove } from './chess.mjs';
 
 export const gameCatalog = [
   { type: 'dino-run', name: 'Dino-Duell · live', description: 'Zwei Spuren, eine Strecke. Gemeinsam starten und über Kakteen springen.' },
+  { type: 'chess', name: 'Schach · Langzeitpartie', description: 'Spielt Zug für Zug über mehrere Tage. Die Stellung bleibt ohne Zeitlimit gespeichert.' },
   { type: 'tic-tac-toe', name: 'Tic-Tac-Toe', description: 'Drei in einer Reihe. Abwechselnd X und O setzen.' },
   { type: 'connect-four', name: 'Vier gewinnt', description: 'Vier Steine waagerecht, senkrecht oder diagonal verbinden.' },
   { type: 'number-duel', name: 'Zahlenduell', description: 'Findet abwechselnd eine geheime Zahl von 1 bis 100. Hinweise sind kostenlos.' },
@@ -11,6 +13,7 @@ export const gameCatalog = [
 // Rules live on the server: clients send moves, never boards, turns or winners.
 export function initialState(type) {
   if (type === 'dino-run') return initialDinoState();
+  if (type === 'chess') return initialChessState();
   if (type === 'tic-tac-toe') return { board: Array(9).fill(0) };
   if (type === 'connect-four') return { board: Array(42).fill(0) };
   if (type === 'number-duel') return { secret: randomInt(1, 101), low: 1, high: 100, guesses: [] };
@@ -34,6 +37,7 @@ function lineWinner(board, width, height, length, mark) {
 }
 
 export function applyMove(type, original, mark, input) {
+  if (type === 'chess') return applyChessMove(original, mark, input);
   const state = structuredClone(original);
   if (type === 'number-duel') {
     const guess = input.guess;
@@ -65,7 +69,10 @@ export function createGameService({ db, one, all, run, now, chatAccess }) {
     type TEXT NOT NULL, creator INTEGER NOT NULL REFERENCES users(id), opponent INTEGER NOT NULL REFERENCES users(id),
     status TEXT NOT NULL DEFAULT 'invited', turn INTEGER, winner INTEGER, state TEXT NOT NULL,
     version INTEGER NOT NULL DEFAULT 0, created INTEGER NOT NULL, updated INTEGER NOT NULL
-  ); CREATE UNIQUE INDEX IF NOT EXISTS one_live_game ON chat_games(request_id) WHERE status IN('invited','active');`);
+  );
+  DROP INDEX IF EXISTS one_live_game;
+  CREATE UNIQUE INDEX IF NOT EXISTS one_live_chess ON chat_games(request_id) WHERE type='chess' AND status IN('invited','active');
+  CREATE UNIQUE INDEX IF NOT EXISTS one_live_quick_game ON chat_games(request_id) WHERE type<>'chess' AND status IN('invited','active');`);
   const expose = g => ({ ...g, state: visibleState(g.type, JSON.parse(g.state), g.status === 'finished') });
   return {
     list(user, request) {
@@ -74,7 +81,11 @@ export function createGameService({ db, one, all, run, now, chatAccess }) {
     },
     create(user, request, type) {
       const chat = chatAccess(user, request);
-      if (one("SELECT id FROM chat_games WHERE request_id=? AND status IN('invited','active')", request)) throw [409, 'In diesem Chat läuft bereits ein Spiel oder eine Einladung.'];
+      initialState(type); // Validate before querying or writing.
+      const existing = type === 'chess'
+        ? one("SELECT id FROM chat_games WHERE request_id=? AND type='chess' AND status IN('invited','active')", request)
+        : one("SELECT id FROM chat_games WHERE request_id=? AND type<>'chess' AND status IN('invited','active')", request);
+      if (existing) throw [409, type === 'chess' ? 'In diesem Chat läuft bereits eine Schachpartie.' : 'In diesem Chat läuft bereits ein kurzes Spiel oder eine Einladung.'];
       const opponent = chat.sender === user.id ? chat.receiver : chat.sender;
       if (type === 'dino-run' && one("SELECT id FROM chat_games WHERE type='dino-run' AND status IN('invited','active') AND (creator IN(?,?) OR opponent IN(?,?))", user.id, opponent, user.id, opponent)) throw [409, 'Eine Person hat bereits eine offene Dino-Runde. Beendet sie zuerst.'];
       const state = initialState(type);
@@ -92,6 +103,10 @@ export function createGameService({ db, one, all, run, now, chatAccess }) {
       } else if (input.action === 'cancel') {
         if (!['active', 'invited'].includes(g.status)) throw [409, 'Dieses Spiel ist schon beendet.'];
         run("UPDATE chat_games SET status='cancelled',version=version+1,updated=? WHERE id=?", now(), g.id);
+      } else if (input.action === 'resign') {
+        if (g.type !== 'chess' || g.status !== 'active') throw [409, 'Diese Schachpartie läuft nicht mehr.'];
+        const winner = g.creator === user.id ? g.opponent : g.creator;
+        run("UPDATE chat_games SET status='finished',winner=?,version=version+1,updated=? WHERE id=?", winner, now(), g.id);
       } else if (input.action === 'move') {
         if (g.type === 'dino-run') throw [400, 'Beim Dino-Duell wird direkt im Spielfeld gesprungen.'];
         if (g.status !== 'active' || g.turn !== user.id) throw [409, 'Du bist gerade nicht am Zug.'];

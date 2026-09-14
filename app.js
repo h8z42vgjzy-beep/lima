@@ -89,6 +89,7 @@ async function doAction(action,b){const id=Number(b?.dataset.id);
  case 'chat-games':await loadChatGames(true);break;
  case 'game-create':await createChatGame(b.dataset.type);break;
  case 'game-action':await sendGameAction(b.dataset);break;
+ case 'chess-square':await chooseChessSquare(b.dataset);break;
  case 'unlock':if(requireUser())await confirmPhotoUnlock(id);break;
  case 'confirm-unlock':await purchasePhoto(id,Number(b.dataset.price));break;
  case 'view-photo':if(requireUser())await displayPhoto('/media/'+id);break;

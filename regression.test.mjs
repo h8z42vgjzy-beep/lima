@@ -184,6 +184,10 @@ test('Multiplayer games require consent and enforce turns, membership, versions 
   const {alice,bob,eve,chat}=await harness(t),rid=await chat();
   assert.equal((await eve.call('games?request='+rid)).status,403);
   assert.equal((await eve.call('game-create',{request:rid,type:'tic-tac-toe'})).status,403);
+  let chess=(await alice.call('game-create',{request:rid,type:'chess'})).data.game;
+  chess=(await bob.call('game-action',{game:chess.id,version:chess.version,action:'accept'})).data.game;
+  chess=(await alice.call('game-action',{game:chess.id,version:chess.version,action:'move',from:52,to:36})).data.game;
+  assert.equal(chess.state.board[36],'P');
   let g=(await alice.call('game-create',{request:rid,type:'tic-tac-toe'})).data.game;
   assert.equal(g.status,'invited');
   assert.equal((await alice.call('game-action',{game:g.id,version:g.version,action:'accept'})).status,403);
@@ -205,6 +209,10 @@ test('Multiplayer games require consent and enforce turns, membership, versions 
     const result=await bob.call('game-action',{game:g.id,version:g.version,action:'move',...input});assert.equal(result.status,200);g=result.data.game;
     if(g.status==='active')await alice.call('game-action',{game:g.id,version:g.version,action:'cancel'});
   }
+  const persisted=(await bob.call('games?request='+rid)).data.games.find(x=>x.id===chess.id);
+  assert.equal(persisted.status,'active');assert.equal(persisted.state.board[36],'P');
+  chess=(await bob.call('game-action',{game:chess.id,version:persisted.version,action:'resign'})).data.game;
+  assert.equal(chess.status,'finished');assert.equal(chess.winner,alice.id);
   assert.equal(await alice.balance(),0);assert.equal(await bob.balance(),0);
   await alice.call('block',{target:bob.id});assert.equal((await bob.call('games?request='+rid)).status,403);
 });
