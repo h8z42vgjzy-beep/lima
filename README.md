@@ -1,8 +1,8 @@
 # F — Feindschaft. Aber mit Blumen.
 
-Aktueller Stand: **Update 4 / Version 1.1.0**. Die genaue Änderungsübersicht, bekannte Grenzen und die Anleitung für das bestehende GitHub-/Render-Projekt stehen in [UPDATE-V4.md](UPDATE-V4.md). Dieses Paket ist noch nicht auf Render veröffentlicht.
+Aktueller Stand: **Update 5 / Version 1.2.0**. Die Änderungsübersicht, Prüfungen und Upload-Anleitung stehen in [UPDATE-V5.md](UPDATE-V5.md). Die vorherigen Änderungen sind in [UPDATE-V4.md](UPDATE-V4.md) dokumentiert. Dieses Paket ist noch nicht auf Render veröffentlicht.
 
-Eine responsive Website für humorvolle Sprüche und freiwillige Wortduelle. Gestaltung in gedämpftem Anthrazit, verwaschenem Rosé und grauem Salbei, mit selbst gezeichneten SVG-Blumenfiguren. Die Website enthält keine fremden Markenbilder und lädt keine externen Schriftarten oder Tracker.
+Eine responsive Website für humorvolle Sprüche und freiwillige Wortduelle. Dunkle Gestaltung mit violetten und grünen Akzenten, animierten SVG-Blumen und einem Live-Dino-Duell im Chat. Die Website lädt keine externen Schriftarten oder Tracker.
 
 ## Enthalten
 
@@ -16,7 +16,8 @@ Eine responsive Website für humorvolle Sprüche und freiwillige Wortduelle. Ges
 - Foto-Uploads und Foto-Freischaltungen mit virtuellen Punkten, 50-%-Anteil für die hochladende Person und nachvollziehbaren Buchungen; keine echten Geldzahlungen
 - Kategorien sind verpflichtend auszuwählen und kostenlos anzulegen
 - Chat-Fotos sind kostenlos; einmaliger Zugriff der empfangenden Person für 20 Sekunden
-- Drei kostenlose Einzelchatspiele: Tic-Tac-Toe, Vier gewinnt, Zahlenduell, jeweils mit Einladung und serverseitigen Zugregeln
+- Vier kostenlose Einzelchatspiele: ein neuer Live-Dino-Lauf, Tic-Tac-Toe, Vier gewinnt und Zahlenduell, jeweils mit Einladung und serverseitigen Regeln
+- Fester Musikplayer außerhalb des Feeds, Abspielposition, Pause und Wiederherstellung nach Netzwerkfehlern
 - Extras für eigene Texte, Lernmaterialien und Code-Dateien; separate Clips- und Musikfilter
 - Meldungen und Moderation mit Zugriff auf den jeweils gemeldeten Inhalt bzw. den Chat der betroffenen beiden Personen
 - Freiwillige Angaben zu Geschlecht, Queer-Identität und Orientierung; privat voreingestellt und jederzeit änderbar

@@ -24,6 +24,77 @@ async function harness(t){
   return {dir,base,db,alice,bob,eve,anon,category,upload,chat,errors:()=>errors};
 }
 
+test('100-point category charges 100 per upload/unlock and pays exactly 50 to the creator',async t=>{
+  const {alice,bob,eve,upload}=await harness(t);
+  await alice.call('daily',{});await bob.call('daily',{});await eve.call('daily',{});
+  const c=await alice.call('category',{name:'Fotokunst Hundert',price:100});assert.equal(c.status,201);
+  const p=await upload(alice,{category:c.data.id,expectedPrice:100});assert.equal(p.status,201);
+  assert.equal(p.data.charged,100);assert.equal(await alice.balance(),200);
+  const photo=(await bob.call('feed')).data.posts.find(x=>x.id===p.data.id).media;
+  assert.equal(photo.open_price,100);
+  assert.equal((await bob.call('unlock',{media:photo.id,expectedPrice:10})).status,409);
+  assert.equal(await bob.balance(),300);
+  assert.equal((await bob.call('unlock',{media:photo.id,expectedPrice:100})).data.charged,100);
+  assert.equal(await bob.balance(),200);assert.equal(await alice.balance(),250);
+  const repeated=await bob.call('unlock',{media:photo.id,expectedPrice:100});assert.equal(repeated.data.charged,0);assert.equal(await alice.balance(),250);
+  await eve.call('unlock',{media:photo.id,expectedPrice:100});assert.equal(await alice.balance(),300);
+  const credits=(await alice.call('wallet')).data.entries.filter(e=>e.amount>0);assert.deepEqual(credits.map(e=>e.amount),[50,50]);
+});
+
+test('Music upload and seek ranges return uninterrupted exact bytes; deleted music is inaccessible',async t=>{
+  const {alice,bob,category}=await harness(t);
+  // A real PCM WAV header plus one second of silence, no external copyrighted audio.
+  const wave=Buffer.alloc(44+16000);wave.write('RIFF',0);wave.writeUInt32LE(wave.length-8,4);wave.write('WAVEfmt ',8);
+  wave.writeUInt32LE(16,16);wave.writeUInt16LE(1,20);wave.writeUInt16LE(1,22);wave.writeUInt32LE(8000,24);
+  wave.writeUInt32LE(16000,28);wave.writeUInt16LE(2,32);wave.writeUInt16LE(16,34);wave.write('data',36);wave.writeUInt32LE(16000,40);
+  const r=await alice.upload('upload-post',{body:'Ein eigener ruhiger Sound.',category:category.id,expectedPrice:0,rights:true,uploadToken:randomUUID()},wave,'test.wav');
+  assert.equal(r.status,201);assert.equal(r.data.charged,0);assert.equal(await alice.balance(),0);
+  const id=r.data.mediaId;
+  const head=await bob.raw('/media/'+id,{method:'HEAD'});assert.equal(head.status,200);assert.equal(head.headers.get('content-type'),'audio/wav');assert.equal(Number(head.headers.get('content-length')),wave.length);
+  const partials=await Promise.all([0,4096,8192,12288].map(async start=>{
+    const end=Math.min(start+4095,wave.length-1),response=await bob.raw('/media/'+id,{headers:{Range:`bytes=${start}-${end}`}});
+    assert.equal(response.status,206);assert.equal(response.headers.get('content-range'),`bytes ${start}-${end}/${wave.length}`);
+    return Buffer.from(await response.arrayBuffer());
+  }));
+  assert.deepEqual(Buffer.concat(partials),wave);
+  const invalid=await bob.raw('/media/'+id,{headers:{Range:'bytes=999999-'}});assert.equal(invalid.status,416);
+  await alice.call('delete-post',{post:r.data.id});assert.equal((await bob.raw('/media/'+id)).status,404);
+});
+
+async function liveStream(t,client,game){
+  const response=await client.raw('/api/dino-stream?game='+game);assert.equal(response.status,200);
+  assert.match(response.headers.get('content-type'),/text\/event-stream/);
+  const reader=response.body.getReader(),decoder=new TextDecoder(),waiting=new Set();let latest=null,buffer='',closed=false;
+  const close=async()=>{closed=true;await reader.cancel().catch(()=>{});};t.after(close);
+  const loop=(async()=>{try{while(!closed){const {done,value}=await reader.read();if(done)break;buffer+=decoder.decode(value,{stream:true});let end;
+    while((end=buffer.indexOf('\n\n'))>=0){const chunk=buffer.slice(0,end);buffer=buffer.slice(end+2);const data=chunk.split('\n').find(x=>x.startsWith('data: '));if(!data)continue;latest=JSON.parse(data.slice(6));for(const w of waiting)if(w.predicate(latest)){clearTimeout(w.timer);waiting.delete(w);w.resolve(latest);}}
+  }}catch(error){if(!closed)for(const w of waiting){clearTimeout(w.timer);w.reject(error);waiting.delete(w);}}})();
+  return {close,loop,next(predicate){if(latest&&predicate(latest))return Promise.resolve(latest);return new Promise((resolve,reject)=>{const w={predicate,resolve,reject,timer:setTimeout(()=>{waiting.delete(w);reject(Error('No matching live Dino event: '+JSON.stringify(latest)));},8000)};waiting.add(w);});}};
+}
+
+test('Live Dino uses two authorized streams, shared countdown, simultaneous jumps and block revocation',async t=>{
+  const {alice,bob,eve,chat}=await harness(t),request=await chat();
+  const created=await alice.call('game-create',{request,type:'dino-run'});assert.equal(created.status,201);const g=created.data.game;
+  assert.equal((await eve.raw('/api/dino-stream?game='+g.id)).status,403);
+  assert.equal((await alice.call('dino-jump',{game:g.id,seq:1})).status,409);
+  const accepted=await bob.call('game-action',{game:g.id,version:g.version,action:'accept'});assert.equal(accepted.status,200);
+  const a=await liveStream(t,alice,g.id);const wait=await a.next(s=>s.phase==='waiting');assert.equal(wait.startAt,null);
+  const b=await liveStream(t,bob,g.id);
+  const [startA,startB]=await Promise.all([a.next(s=>s.phase==='countdown'),b.next(s=>s.phase==='countdown')]);
+  assert.equal(startA.startAt,startB.startAt);assert.deepEqual(startA.obstacles,startB.obstacles);
+  await a.next(s=>s.phase==='running');
+  const moves=await Promise.all([alice.call('dino-jump',{game:g.id,seq:1,score:999999,y:9999}),bob.call('dino-jump',{game:g.id,seq:1})]);
+  for(const r of moves){assert.equal(r.status,200);assert.equal(r.data.accepted,true);}
+  const sync=await b.next(s=>s.players.every(p=>p.seq===1&&p.y>0));assert.ok(sync.players.every(p=>p.y<150));
+  assert.equal((await alice.call('dino-jump',{game:g.id,seq:1})).data.repeated,true);
+  assert.equal((await eve.call('dino-jump',{game:g.id,seq:1})).status,403);
+  assert.equal((await alice.call('game-action',{game:g.id,version:accepted.data.game.version,action:'move',cell:0})).status,400);
+  assert.equal(await alice.balance(),0);assert.equal(await bob.balance(),0);
+  await bob.call('block',{target:alice.id});const stopped=await a.next(s=>s.phase==='cancelled');assert.match(stopped.reason,/freigegeben/);
+  assert.equal((await alice.raw('/api/dino-stream?game='+g.id)).status,403);
+  await a.close();await b.close();
+});
+
 test('Mandatory category, priced uploads, atomic split, real photo bytes and idempotent reopening',async t=>{
   const h=await harness(t),{alice,bob,eve,anon,upload,category,db}=h;
   await alice.call('daily',{});await bob.call('daily',{});

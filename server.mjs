@@ -8,11 +8,18 @@ import path from 'node:path';
 import { createGameService } from './games.mjs';
 import { validateMedia } from './media-validation.mjs';
 import { createExtrasService } from './extras.mjs';
+import { createDinoService } from './dino.mjs';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 // Render serves the files from public/. GitHub's mobile uploader can flatten that
 // folder, so accepting both layouts prevents a blank start page after deployment.
-const staticRoot = existsSync(path.join(root, 'public')) ? path.join(root, 'public') : root;
+const staticCandidates = [path.join(root, 'public'), root];
+// A complete new client takes priority over an old copy in the other layout.
+const staticRoot = staticCandidates.find(directory => {
+  const index = path.join(directory, 'index.html');
+  return existsSync(index) && readFileSync(index, 'utf8').includes('name="f-release" content="5"') &&
+    ['music-player.js','dino-client.js','action.css','features.js','app.js'].every(file => existsSync(path.join(directory,file)));
+}) || staticCandidates.find(directory => existsSync(path.join(directory,'index.html'))) || root;
 const dataDir = process.env.F_DATA_DIR || path.join(root, 'data');
 mkdirSync(dataDir, {recursive: true, mode: 0o700});
 const mediaDir = path.join(dataDir, 'media');
@@ -102,8 +109,12 @@ const blocked=(a,b)=>!!one('SELECT 1 FROM blocks WHERE (user_id=? AND target=?) 
 function chatAccess(user,rid){const r=one('SELECT * FROM requests WHERE id=?',rid);if(!user||!r||r.status!=='accepted'||![r.sender,r.receiver].includes(user.id)||blocked(r.sender,r.receiver))throw [403,'Dieser Chat ist nicht freigegeben.'];return r;}
 function postAccess(uid,pid){const p=one('SELECT * FROM posts WHERE id=? AND deleted=0 AND (expires IS NULL OR expires>?)',pid,now());if(!p||blocked(uid,p.user_id))throw [404,'Dieser Beitrag ist nicht mehr verfügbar.'];return p;}
 const games=createGameService({db,one,all,run,now,chatAccess});
+const dino=createDinoService({one,run,now,chatAccess,assertAvailable(g){
+  for(const id of [g.creator,g.opponent]){const u=one('SELECT * FROM users WHERE id=?',id);if(!u)throw [403,'Konto nicht verfügbar.'];requireActive(u);chatAccess(u,g.request_id);}
+}});
 const extras=createExtrasService({dataDir,one,all,run,transact,now,postAccess});
 const limits=new Map();
+let uploadInProgress=false;
 function rate(key,max,window=60000){const t=now();let arr=(limits.get(key)||[]).filter(x=>t-x<window);if(arr.length>=max)throw [429,'Kurz durchatmen. Bitte versuche es gleich noch einmal.'];arr.push(t);limits.set(key,arr);}
 setInterval(()=>{for(const [k,v] of limits)if(now()-v.at(-1)>3600000)limits.delete(k);run('DELETE FROM sessions WHERE expires<?',now());cleanupExpired();checkStorage();},300000).unref();
 function textField(b,k,min,max){const v=typeof b[k]==='string'?b[k].trim():'';if(v.length<min||v.length>max)throw [400,`${k==='body'?'Dein Text':'Deine Eingabe'} muss zwischen ${min} und ${max} Zeichen lang sein.`];return v;}
@@ -129,6 +140,9 @@ function sendMedia(req,res,m){const full=path.join(mediaDir,m.file_name);let siz
 const staticFiles={'/':['index.html','text/html; charset=utf-8'],'/app.js':['app.js','text/javascript; charset=utf-8'],'/style.css':['style.css','text/css; charset=utf-8'],'/night.css':['night.css','text/css; charset=utf-8'],'/favicon.svg':['favicon.svg','image/svg+xml']};
 staticFiles['/features.js']=['features.js','text/javascript; charset=utf-8'];
 staticFiles['/features.css']=['features.css','text/css; charset=utf-8'];
+staticFiles['/music-player.js']=['music-player.js','text/javascript; charset=utf-8'];
+staticFiles['/dino-client.js']=['dino-client.js','text/javascript; charset=utf-8'];
+staticFiles['/action.css']=['action.css','text/css; charset=utf-8'];
 const server=http.createServer(async(req,res)=>{
   res.setHeader('X-Content-Type-Options','nosniff');
   res.setHeader('Referrer-Policy','same-origin');
@@ -160,6 +174,10 @@ const server=http.createServer(async(req,res)=>{
       if(!user)throw [401,'Melde dich an, um mitzumachen.'];
       if(route==='wallet')return send(200,{...wallet(user.id),entries:all('SELECT description,amount_half/2.0 AS amount,created FROM wallet_entries WHERE user_id=? ORDER BY id DESC LIMIT 50',user.id)});
       if(route==='games')return send(200,games.list(user,idField(Object.fromEntries(url.searchParams),'request')));
+      if(route==='dino-stream'){
+        requireActive(user);
+        return dino.stream(user,idField(Object.fromEntries(url.searchParams),'game'),req,res,()=>!!one('SELECT 1 FROM sessions WHERE token=? AND expires>?',digest(cookie),now()));
+      }
       if(route==='extras')return send(200,extras.list(user,url.searchParams.get('space')));
       if(route==='document'){const d=extras.download(user,idField(Object.fromEntries(url.searchParams),'id'));res.writeHead(200,{'Content-Type':d.mime,'Content-Disposition':`attachment; filename*=UTF-8''${encodeURIComponent(d.original_name)}`,'Cache-Control':'private, no-store','Content-Security-Policy':"default-src 'none'; sandbox"});return res.end(d.content);}
       if(route==='admin/reports'){
@@ -206,7 +224,11 @@ const server=http.createServer(async(req,res)=>{
       if(!user)throw [401,'Melde dich an, um Dateien hochzuladen.'];
       if(!['upload-post','upload-chat','upload-extra'].includes(route))throw [404,'Nicht gefunden.'];
       rate('upload:'+user.id,12);
-      const parsed=parseMultipart(await rawBody(req,route==='upload-extra'?11*1024**2:105*1024**2),contentType);const file=parsed.files.find(x=>x.field==='file');if(!file||parsed.files.length!==1)throw [400,'Bitte wähle genau eine Datei aus.'];
+      // Avoid several in-memory multipart uploads exhausting a small Render instance.
+      if(uploadInProgress)throw [429,'Gerade läuft ein weiterer Upload. Bitte versuche es in einigen Sekunden erneut.'];
+      let parsed;uploadInProgress=true;
+      try{parsed=parseMultipart(await rawBody(req,route==='upload-extra'?11*1024**2:105*1024**2),contentType);}finally{uploadInProgress=false;}
+      const file=parsed.files.find(x=>x.field==='file');if(!file||parsed.files.length!==1)throw [400,'Bitte wähle genau eine Datei aus.'];
       if(parsed.fields.rights!=='true')throw [400,'Bitte bestätige, dass du die Rechte an der Datei hast.'];
       if(route==='upload-extra'){reserveStorage(file.data.length);return send(201,extras.create(user,parsed.fields,file));}
       const info=validateMedia(file);
@@ -257,6 +279,7 @@ const server=http.createServer(async(req,res)=>{
       return send(200,{user:safeUser(u)});
     }
     if(!user)throw [401,'Melde dich an, um mitzumachen.'];
+    if(route==='dino-jump'){requireActive(user);rate('dino-jump:'+user.id,12,1000);idField(b,'game');return send(200,dino.jump(user,b));}
     rate('write:'+user.id,45);
     if(route==='extra')return send(201,extras.create(user,b));
     if(route==='game-create')return send(201,games.create(user,idField(b,'request'),b.type));

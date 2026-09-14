@@ -1,6 +1,8 @@
 import { randomInt } from 'node:crypto';
+import { initialDinoState } from './dino.mjs';
 
 export const gameCatalog = [
+  { type: 'dino-run', name: 'Dino-Duell · live', description: 'Zwei Spuren, eine Strecke. Gemeinsam starten und über Kakteen springen.' },
   { type: 'tic-tac-toe', name: 'Tic-Tac-Toe', description: 'Drei in einer Reihe. Abwechselnd X und O setzen.' },
   { type: 'connect-four', name: 'Vier gewinnt', description: 'Vier Steine waagerecht, senkrecht oder diagonal verbinden.' },
   { type: 'number-duel', name: 'Zahlenduell', description: 'Findet abwechselnd eine geheime Zahl von 1 bis 100. Hinweise sind kostenlos.' },
@@ -8,6 +10,7 @@ export const gameCatalog = [
 
 // Rules live on the server: clients send moves, never boards, turns or winners.
 export function initialState(type) {
+  if (type === 'dino-run') return initialDinoState();
   if (type === 'tic-tac-toe') return { board: Array(9).fill(0) };
   if (type === 'connect-four') return { board: Array(42).fill(0) };
   if (type === 'number-duel') return { secret: randomInt(1, 101), low: 1, high: 100, guesses: [] };
@@ -73,6 +76,7 @@ export function createGameService({ db, one, all, run, now, chatAccess }) {
       const chat = chatAccess(user, request);
       if (one("SELECT id FROM chat_games WHERE request_id=? AND status IN('invited','active')", request)) throw [409, 'In diesem Chat läuft bereits ein Spiel oder eine Einladung.'];
       const opponent = chat.sender === user.id ? chat.receiver : chat.sender;
+      if (type === 'dino-run' && one("SELECT id FROM chat_games WHERE type='dino-run' AND status IN('invited','active') AND (creator IN(?,?) OR opponent IN(?,?))", user.id, opponent, user.id, opponent)) throw [409, 'Eine Person hat bereits eine offene Dino-Runde. Beendet sie zuerst.'];
       const state = initialState(type);
       const id = Number(run('INSERT INTO chat_games(request_id,type,creator,opponent,state,created,updated) VALUES(?,?,?,?,?,?,?)', request, type, user.id, opponent, JSON.stringify(state), now(), now()).lastInsertRowid);
       return { game: expose(one('SELECT * FROM chat_games WHERE id=?', id)) };
@@ -89,6 +93,7 @@ export function createGameService({ db, one, all, run, now, chatAccess }) {
         if (!['active', 'invited'].includes(g.status)) throw [409, 'Dieses Spiel ist schon beendet.'];
         run("UPDATE chat_games SET status='cancelled',version=version+1,updated=? WHERE id=?", now(), g.id);
       } else if (input.action === 'move') {
+        if (g.type === 'dino-run') throw [400, 'Beim Dino-Duell wird direkt im Spielfeld gesprungen.'];
         if (g.status !== 'active' || g.turn !== user.id) throw [409, 'Du bist gerade nicht am Zug.'];
         const next = applyMove(g.type, JSON.parse(g.state), g.creator === user.id ? 1 : 2, input);
         run('UPDATE chat_games SET state=?,status=?,winner=?,turn=?,version=version+1,updated=? WHERE id=?', JSON.stringify(next.state), next.won || next.draw ? 'finished' : 'active', next.won ? user.id : null, g.turn === g.creator ? g.opponent : g.creator, now(), g.id);

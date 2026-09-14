@@ -5,18 +5,29 @@ let photoGeneration = 0;
 let currentPhotoURL = null;
 let gamesVisible = false;
 
+function reactionBurst(rect, symbol = '✳') {
+  if (globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+  for (let i = 0; i < 4; i++) {
+    const particle = document.createElement('span'); particle.className = 'effect-particle';
+    particle.textContent = symbol; particle.setAttribute('aria-hidden', 'true');
+    particle.style.left = (rect.left + rect.width / 2 + (i - 1.5) * 15) + 'px';
+    particle.style.top = (rect.top - i % 2 * 9) + 'px';
+    document.body.append(particle); setTimeout(() => particle.remove(), 850);
+  }
+}
+
 function points(value) { return Number(value || 0).toLocaleString('de-DE', { maximumFractionDigits: 1 }); }
 function renderPostMedia(p) {
   const m = p.media;
   if (!m) return '';
   if (m.kind === 'image') {
     return `<div class="post-media photo-card">${m.unlocked
-      ? `<button class="photo-preview" data-action="view-photo" data-id="${m.id}" aria-label="Foto vergrößern"><img src="/media/${m.id}" alt="Foto von ${esc(p.name)}" loading="lazy" data-photo="${m.id}"></button><small>${m.owned ? 'Dein Foto · ohne erneute Kosten' : 'Freigeschaltet · ohne erneute Kosten'}</small>`
-      : `<div class="photo-locked"><span aria-hidden="true">▧</span><strong>Ein Foto. Dein nächster Einblick.</strong><button class="button dark small" data-action="unlock" data-id="${m.id}">${m.open_price ? `Foto öffnen · ${points(m.open_price)} ✳` : 'Foto öffnen · kostenlos'}</button><small>Einmal freischalten · bis zum Ablauf ansehen</small></div>`}</div>`;
+      ? `<button class="photo-preview" data-action="view-photo" data-id="${m.id}" aria-label="Foto vergrößern"><img src="/media/${m.id}" alt="Foto von ${esc(p.name)}" loading="lazy" data-photo="${m.id}"></button><small>${m.owned ? `Dein Foto · andere öffnen für ${points(m.open_price)} ✳ · dein Anteil ${points(m.open_price / 2)} ✳` : 'Freigeschaltet · ohne erneute Kosten'}</small>`
+      : `<div class="photo-locked"><span aria-hidden="true">▧</span><strong>Ein Foto. Dein nächster Einblick.</strong><button class="button dark small" data-action="unlock" data-id="${m.id}">${m.open_price ? `Foto öffnen · ${points(m.open_price)} ✳` : 'Foto öffnen · kostenlos'}</button><small>${points(m.open_price / 2)} ✳ gehen an ${esc(p.name)} · einmalig pro Person</small><small>Bis zum Ablauf erneut ansehen</small></div>`}</div>`;
   }
   return m.kind === 'video'
     ? `<video class="post-media feed-video" controls playsinline preload="metadata" src="/media/${m.id}" aria-label="Video von ${esc(p.name)}"></video>`
-    : `<audio class="post-media" controls preload="metadata" src="/media/${m.id}" aria-label="Musik von ${esc(p.name)}"></audio>`;
+    : `<div class="audio-card" data-audio-card="${m.id}"><div class="record-art" aria-hidden="true"><span>f✳</span></div><div class="audio-info"><small>SOUNDTRACK ZUM WELTSCHMERZ</small><strong>${esc(p.body.slice(0,80))}</strong><span>Von ${esc(p.name)} · kostenlos anhören</span></div><button class="audio-play" data-action="play-music" data-id="${m.id}" aria-label="Musik von ${esc(p.name)} abspielen">▶</button><div class="audio-bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div>`;
 }
 
 function updateUploadPrice() {
@@ -38,16 +49,17 @@ async function validateLocalFile(file) {
   const image = /\.(jpe?g|png|webp)$/i.test(file.name), video = /\.(mp4|webm)$/i.test(file.name);
   const limit = image ? 10 : video ? 100 : 25;
   if (!file.size || file.size > limit * 1024 ** 2) throw Error(`Diese Datei darf höchstens ${limit} MB groß sein.`);
-  if (!image && !video) return;
+  const audio = /\.(mp3|m4a|ogg|wav)$/i.test(file.name);
+  if (!image && !video && !audio) throw Error('Bitte wähle JPG, PNG, WebP, MP3, M4A, OGG, WAV, MP4 oder WebM.');
   const url = URL.createObjectURL(file);
   try {
     await new Promise((resolve, reject) => {
-      const element = image ? new Image() : document.createElement('video');
+      const element = image ? new Image() : document.createElement(audio ? 'audio' : 'video');
       const timer = setTimeout(() => finish(Error('Die Datei konnte nicht geprüft werden. Bitte exportiere sie erneut.')), 15000);
-      function finish(error) { clearTimeout(timer); element.onload = element.onerror = element.onloadedmetadata = null; element.removeAttribute('src'); error ? reject(error) : resolve(); }
+      function finish(error) { clearTimeout(timer); element.onload = element.onerror = element.onloadedmetadata = null; element.removeAttribute('src'); if (!image) element.load(); error ? reject(error) : resolve(); }
       element.onerror = () => finish(Error('Dein Browser kann diese Datei nicht öffnen. Bitte nutze ein unterstütztes Format.'));
       if (image) element.onload = () => finish();
-      else { element.preload = 'metadata'; element.onloadedmetadata = () => finish(!Number.isFinite(element.duration) || element.duration > 180 ? Error('Videos dürfen höchstens 3 Minuten lang sein.') : null); }
+      else { element.preload = 'metadata'; element.onloadedmetadata = () => finish(!Number.isFinite(element.duration) || element.duration <= 0 ? Error('Dateidauer unlesbar. Bitte exportiere die Datei erneut.') : video && element.duration > 180 ? Error('Videos dürfen höchstens 3 Minuten lang sein.') : null); }
       element.src = url;
     });
   } finally { URL.revokeObjectURL(url); }
@@ -172,7 +184,7 @@ async function loadChatGames(expand = false) {
   const button = $('#games-toggle'); if (button) { button.textContent = active ? 'Spiele · Runde läuft' : 'Spiele · kostenlos'; button.setAttribute('aria-expanded', String(gamesVisible || !!active)); }
   container.hidden = !gamesVisible && !active;
   const newest = active || data.games[0];
-  const signature = JSON.stringify([data.games, gamesVisible]);
+  const signature = JSON.stringify([data.games.map(g => g.type === 'dino-run' && g.status === 'active' ? {id:g.id,version:g.version,status:g.status} : g), gamesVisible]);
   if (container.dataset.version === signature) return; container.dataset.version = signature;
   const nameOf = id => id === user.id ? 'Du' : chatPerson.name;
   const buttons = (g, action, label) => `<button class="mini-button" data-action="game-action" data-id="${g.id}" data-version="${g.version}" data-game-action="${action}">${label}</button>`;
@@ -180,16 +192,19 @@ async function loadChatGames(expand = false) {
   if (newest) {
     const g = newest, ownTurn = g.status === 'active' && g.turn === user.id;
     const name = data.catalog.find(c => c.type === g.type)?.name || g.type;
-    const status = g.status === 'invited' ? `${nameOf(g.creator)} lädt zum Spielen ein.` : g.status === 'active' ? `${nameOf(g.turn)} ${ownTurn ? 'bist' : 'ist'} am Zug.` : g.status === 'finished' ? g.winner ? `${nameOf(g.winner)} ${g.winner === user.id ? 'hast' : 'hat'} gewonnen.` : 'Unentschieden.' : g.status === 'declined' ? 'Einladung abgelehnt.' : 'Spiel beendet.';
+    const status = g.status === 'invited' ? `${nameOf(g.creator)} lädt zum Spielen ein.` : g.status === 'active' ? g.type === 'dino-run' ? 'Euer Live-Duell. Beide spielen gleichzeitig.' : `${nameOf(g.turn)} ${ownTurn ? 'bist' : 'ist'} am Zug.` : g.status === 'finished' ? g.winner ? `${nameOf(g.winner)} ${g.winner === user.id ? 'hast' : 'hat'} gewonnen.` : 'Unentschieden.' : g.status === 'declined' ? 'Einladung abgelehnt.' : 'Spiel beendet.';
     let board = '';
     if (g.status !== 'invited') {
-      if (g.type === 'tic-tac-toe') board = `<div class="game-board ttt-board">${g.state.board.map((mark, cell) => `<button class="game-cell mark-${mark}" data-action="game-action" data-game-action="move" data-id="${g.id}" data-version="${g.version}" data-cell="${cell}" aria-label="Feld ${cell + 1}${mark ? ': ' + (mark === 1 ? 'X' : 'O') : ', frei'}" ${!ownTurn || mark ? 'disabled' : ''}>${mark === 1 ? 'X' : mark === 2 ? 'O' : '·'}</button>`).join('')}</div>`;
+      if (g.type === 'dino-run') board = `<div id="dino-stage" class="dino-stage"><canvas width="720" height="348" tabindex="0" role="img" aria-label="Dino-Duell mit zwei Spuren. Leertaste oder Pfeil hoch zum Springen."></canvas><p data-dino-status role="status">Runde wird geladen …</p><button type="button" class="button dark full dino-jump" data-dino-jump disabled>↑ SPRINGEN</button><small>Tippen · Leertaste · Pfeil hoch. Wer länger durchhält, gewinnt. Maximal 60 Sekunden.</small></div>`;
+      else if (g.type === 'tic-tac-toe') board = `<div class="game-board ttt-board">${g.state.board.map((mark, cell) => `<button class="game-cell mark-${mark}" data-action="game-action" data-game-action="move" data-id="${g.id}" data-version="${g.version}" data-cell="${cell}" aria-label="Feld ${cell + 1}${mark ? ': ' + (mark === 1 ? 'X' : 'O') : ', frei'}" ${!ownTurn || mark ? 'disabled' : ''}>${mark === 1 ? 'X' : mark === 2 ? 'O' : '·'}</button>`).join('')}</div>`;
       else if (g.type === 'connect-four') board = `<div class="connect-controls">${Array.from({ length: 7 }, (_, column) => `<button class="mini-button" data-action="game-action" data-game-action="move" data-id="${g.id}" data-version="${g.version}" data-column="${column}" aria-label="Stein in Spalte ${column + 1}" ${!ownTurn || g.state.board[column] ? 'disabled' : ''}>${column + 1} ↓</button>`).join('')}</div><div class="game-board connect-board" role="img" aria-label="Vier-gewinnt-Spielstand">${g.state.board.map((mark, i) => `<span class="game-dot mark-${mark}" title="Zeile ${Math.floor(i/7)+1}, Spalte ${i%7+1}: ${mark || 'frei'}">${mark === 1 ? '●' : mark === 2 ? '○' : '·'}</span>`).join('')}</div>`;
       else board = `<p>Bereich: <strong>${g.state.low}–${g.state.high}</strong>${g.state.answer ? ` · Gesuchte Zahl: ${g.state.answer}` : ''}</p><ol class="guess-history">${g.state.guesses.map(x => `<li>${esc(nameOf(x.mark === 1 ? g.creator : g.opponent))}: ${x.guess} → ${esc(x.hint)}</li>`).join('')}</ol>${ownTurn ? `<form id="guess-form" data-id="${g.id}" data-version="${g.version}"><label class="field" for="game-guess">Deine Zahl</label><input id="game-guess" name="guess" type="number" min="${g.state.low}" max="${g.state.high}" step="1" required><button class="button dark small">Raten</button></form>` : ''}`;
     }
-    gameHTML = `<div class="game-card"><h3>${esc(name)}</h3><p role="status">${esc(status)}</p>${g.status === 'invited' && g.opponent === user.id ? buttons(g, 'accept', 'Annehmen') + buttons(g, 'decline', 'Ablehnen') : ''}${board}${['invited','active'].includes(g.status) ? buttons(g, 'cancel', 'Spiel beenden') : ''}<p class="form-hint">${esc(nameOf(g.creator))}: X / ● · ${esc(nameOf(g.opponent))}: O / ○ · keine Punkte-Einsätze</p></div>`;
+    gameHTML = `<div class="game-card"><h3>${esc(name)}</h3><p role="status">${esc(status)}</p>${g.status === 'invited' && g.opponent === user.id ? buttons(g, 'accept', 'Annehmen') + buttons(g, 'decline', 'Ablehnen') : ''}${board}${['invited','active'].includes(g.status) ? buttons(g, 'cancel', 'Spiel beenden') : ''}<p class="form-hint">${g.type === 'dino-run' ? 'Dein Dino ist grün. Der andere ist lila.' : `${esc(nameOf(g.creator))}: X / ● · ${esc(nameOf(g.opponent))}: O / ○`} · kostenlos</p></div>`;
   }
+  globalThis.dinoLive?.stop();
   container.innerHTML = `<p class="form-hint">Nur für euch beide. Kostenlos, ohne Einsätze und ohne Einfluss auf das Guthaben.</p>${gameHTML}${!active ? `<div class="game-picker">${data.catalog.map(g => `<button class="game-choice" data-action="game-create" data-type="${g.type}"><strong>${esc(g.name)}</strong><span>${esc(g.description)}</span><small>Einladen ↗</small></button>`).join('')}</div>` : ''}`;
+  if (newest?.type === 'dino-run' && newest.status !== 'invited') globalThis.dinoLive?.mount($('#dino-stage'),newest,user.id,chatPerson.name,api);
 }
 async function createChatGame(type) { await api('game-create', { request: chatId, type }); gamesVisible = true; await loadChatGames(); }
 async function sendGameAction(dataset) {

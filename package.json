@@ -1,8 +1,8 @@
 {
   "name": "feindschaft",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "private": true,
   "type": "module",
-  "scripts": {"dev": "node server.mjs", "start": "node server.mjs", "check": "node --check server.mjs && node --check games.mjs && node --check extras.mjs && node --check media-validation.mjs && node --check public/app.js && node --check public/features.js", "test": "node --test tests.mjs regression.test.mjs games.test.mjs frontend.test.mjs"},
+  "scripts": {"dev": "node server.mjs", "start": "node server.mjs", "check": "node --check server.mjs && node --check games.mjs && node --check dino.mjs && node --check extras.mjs && node --check media-validation.mjs && node --check public/app.js && node --check public/features.js && node --check public/music-player.js && node --check public/dino-client.js", "test": "node --test tests.mjs regression.test.mjs games.test.mjs frontend.test.mjs music.test.mjs dino.test.mjs"},
   "engines": {"node": ">=24.0.0"}
 }
