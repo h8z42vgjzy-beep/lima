@@ -49,3 +49,26 @@ test('UI wiring: mandatory category, media helpers load before app, games and ex
   assert.match(css,/\.chess-square\.piece-white>span/);assert.match(css,/\.chess-square\.legal-target:after/);
   assert.match(features,/data-targets="\$\{targets\.join\(','\)\}"/);
 });
+
+test('Chess vectors have fixed opposite fills and distinct silhouettes',async()=>{
+ const h=ui(); await h.ready;
+ const silhouettes=new Set();
+ for(const piece of ['K','Q','R','B','N','P']) {
+   const white=h.run(`chessPieceSVG('${piece}')`),black=h.run(`chessPieceSVG('${piece.toLowerCase()}')`);
+   assert.match(white,/fill="#fffaf0" stroke="#18202d"/);
+   assert.match(black,/fill="#18202d" stroke="#fffaf0"/);
+   assert.match(white,/<svg/);silhouettes.add(white);
+ }
+ assert.equal(silhouettes.size,6);
+});
+
+test('Chess result remains visible after finishing and alongside another active game',async()=>{
+ const h=ui();await h.ready;
+ h.run(`user={id:1};chatId=5;modalView='chat';chatPerson={name:'Test'};
+ api=async()=>({catalog:[],games:[{id:8,type:'chess',creator:1,opponent:2,status:'finished',winner:1,version:5,state:{board:Array(64).fill(null)}}]});`);
+ await h.run('loadChatGames()');
+ assert.equal(h.element('#chat-games').hidden,false);
+ assert.match(h.element('#chat-games').innerHTML,/Du hast gewonnen/);
+ assert.match(h.element('#chat-games').innerHTML,/data-chess-board="8"/);
+ assert.equal(h.run(`gamesForDisplay([{id:10,type:'dino-run',status:'active'},{id:8,type:'chess',status:'finished'}]).length`),2);
+});

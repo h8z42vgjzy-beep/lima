@@ -15,11 +15,12 @@ const root = path.dirname(fileURLToPath(import.meta.url));
 // folder, so accepting both layouts prevents a blank start page after deployment.
 const staticCandidates = [path.join(root, 'public'), root];
 // A complete new client takes priority over an old copy in the other layout.
-const staticRoot = staticCandidates.find(directory => {
-  const index = path.join(directory, 'index.html');
-  return existsSync(index) && readFileSync(index, 'utf8').includes('name="f-release" content="6"') &&
-    ['music-player.js','dino-client.js','discovery-effects.js','action.css','features.js','app.js'].every(file => existsSync(path.join(directory,file)));
-}) || staticCandidates.find(directory => existsSync(path.join(directory,'index.html'))) || root;
+const staticRoot = staticCandidates.filter(directory => {
+  return ['index.html','music-player.js','dino-client.js','discovery-effects.js','action.css','features.js','app.js'].every(file=>existsSync(path.join(directory,file)));
+}).sort((a,b)=>{
+  const version=directory=>Number(readFileSync(path.join(directory,'index.html'),'utf8').match(/name="f-release" content="([0-9.]+)"/)?.[1]||0);
+  return version(b)-version(a);
+})[0] || staticCandidates.find(directory=>existsSync(path.join(directory,'index.html'))) || root;
 const dataDir = process.env.F_DATA_DIR || path.join(root, 'data');
 mkdirSync(dataDir, {recursive: true, mode: 0o700});
 const mediaDir = path.join(dataDir, 'media');

@@ -85,7 +85,10 @@ export function createGameService({ db, one, all, run, now, chatAccess }) {
   return {
     list(user, request) {
       chatAccess(user, request);
-      return { catalog: gameCatalog, games: all('SELECT * FROM chat_games WHERE request_id=? ORDER BY id DESC LIMIT 12', request).map(g=>expose(g,user.id)) };
+      const rows=all('SELECT * FROM chat_games WHERE request_id=? ORDER BY id DESC LIMIT 12',request);
+      const chess=one("SELECT * FROM chat_games WHERE request_id=? AND type='chess' ORDER BY id DESC LIMIT 1",request);
+      if(chess&&!rows.some(g=>g.id===chess.id))rows.push(chess);
+      return {catalog:gameCatalog,games:rows.map(g=>expose(g,user.id))};
     },
     create(user, request, type) {
       const chat = chatAccess(user, request);

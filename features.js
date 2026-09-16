@@ -175,6 +175,27 @@ async function loadChatMessages() {
 }
 
 const chessPieces = {K:'♔',Q:'♕',R:'♖',B:'♗',N:'♘',P:'♙',k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'};
+// Original vector silhouettes: fixed fills, independent of installed chess fonts.
+function chessPieceSVG(piece) {
+  const shapes = {
+    p:'<circle cx="32" cy="19" r="8"/><path d="M26 28h12l-2 12 8 10H20l8-10z"/>',
+    r:'<path d="M18 12h7v7h5v-7h5v7h5v-7h7v16l-6 5 2 17H21l2-17-5-5z"/><path d="M23 29h18" fill="none"/>',
+    n:'<path d="M20 50l3-11 14-12-11 3-10-5 13-14 2-6 8 6c13 6 13 23 9 39z"/><circle cx="34" cy="18" r="2" fill="currentColor" stroke="none"/><path d="M29 11l-2 8" fill="none"/>',
+    b:'<path d="M32 8c-18 15-16 23-5 28l-7 14h24l-7-14c11-5 13-13-5-28z"/><path d="M35 17l-8 10M25 37h14" fill="none"/>',
+    q:'<path d="M17 18l9 9 6-15 6 15 9-9-6 25H23z"/><circle cx="16" cy="15" r="3"/><circle cx="32" cy="9" r="3"/><circle cx="48" cy="15" r="3"/><path d="M23 43h18l4 7H19z"/>',
+    k:'<path d="M29 6h6v6h6v6h-6v7h-6v-7h-6v-6h6z"/><path d="M22 25h20l-5 17 7 8H20l7-8z"/><path d="M25 41h14" fill="none"/>'
+  };
+  const white=piece===piece.toUpperCase();
+  return `<svg class="chess-piece" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><g fill="${white?'#fffaf0':'#18202d'}" stroke="${white?'#18202d':'#fffaf0'}" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round">${shapes[piece.toLowerCase()]}<path d="M19 51h26l3 7H16z"/></g></svg>`;
+}
+const chessNames={k:'König',q:'Dame',r:'Turm',b:'Läufer',n:'Springer',p:'Bauer'};
+function gamesForDisplay(games) {
+  const active=games.filter(g=>['active','invited'].includes(g.status));
+  const latest=games.find(g=>g.type==='chess');
+  if(latest && !active.some(g=>g.id===latest.id)) active.push(latest);
+  if(!active.length && games.length) active.push(games[0]);
+  return active;
+}
 function chessBoard(g, ownTurn) {
   const white = g.creator === user.id;
   const order = Array.from({length:64},(_,i)=>white?i:63-i);
@@ -184,8 +205,8 @@ function chessBoard(g, ownTurn) {
   return `<div class="chess-wrap"><div class="chess-board" data-chess-board="${g.id}" role="grid" aria-label="Schachbrett, ${white?'Weiß':'Schwarz'} unten">${order.map(square=>{
     const piece=g.state.board[square],x=square%8,y=Math.floor(square/8),last=g.state.lastMove&&(g.state.lastMove.from===square||g.state.lastMove.to===square),targets=legal.get(square)||[];
     const pieceClass=piece?(piece===piece.toUpperCase()?' piece-white':' piece-black'):'';
-    return `<button type="button" class="chess-square ${(x+y)%2?'dark':'light'}${last?' last-move':''}${pieceClass}" data-action="chess-square" data-id="${g.id}" data-version="${g.version}" data-square="${square}" data-own="${ownSide(piece)?'1':'0'}" data-targets="${targets.join(',')}" role="gridcell" aria-label="${file(square)}${rank(square)}${piece?' '+chessPieces[piece]:' frei'}" ${!ownTurn?'disabled':''}><span aria-hidden="true">${piece?chessPieces[piece]:''}</span>${((white&&x===0)||(!white&&x===7))?`<small>${rank(square)}</small>`:''}${((white&&y===7)||(!white&&y===0))?`<i>${file(square)}</i>`:''}</button>`;
-  }).join('')}</div><p class="chess-help">${ownTurn?'Tippe zuerst deine Figur und danach das Zielfeld.':'Die Stellung bleibt gespeichert. Du kannst später zurückkommen.'}${g.state.check?' · SCHACH!':''}</p></div>`;
+    return `<button type="button" class="chess-square ${(x+y)%2?'dark':'light'}${last?' last-move':''}${pieceClass}" data-action="chess-square" data-id="${g.id}" data-version="${g.version}" data-square="${square}" data-own="${ownSide(piece)?'1':'0'}" data-targets="${targets.join(',')}" role="gridcell" aria-label="${file(square)}${rank(square)}${piece?' '+(piece===piece.toUpperCase()?'Weiß: ':'Schwarz: ')+chessNames[piece.toLowerCase()]:' frei'}" ${!ownTurn?'disabled':''}><span aria-hidden="true">${piece?chessPieceSVG(piece):''}</span>${((white&&x===0)||(!white&&x===7))?`<small>${rank(square)}</small>`:''}${((white&&y===7)||(!white&&y===0))?`<i>${file(square)}</i>`:''}</button>`;
+  }).join('')}</div><p class="chess-help">${g.status==='finished'?'Partie beendet. Das Endbrett bleibt hier sichtbar.':ownTurn?'Tippe zuerst deine Figur und danach das Zielfeld.':'Die Stellung bleibt gespeichert. Du kannst später zurückkommen.'}${g.state.check?' · SCHACH!':''}</p></div>`;
 }
 
 function renderGameCard(g, catalog, nameOf) {
@@ -203,7 +224,7 @@ function renderGameCard(g, catalog, nameOf) {
   }
   const controls=g.status==='invited'&&g.opponent===user.id?button('accept','Annehmen')+button('decline','Ablehnen'):g.status==='active'?g.type==='chess'?button('resign','Aufgeben'):button('cancel','Spiel beenden'):g.status==='invited'?button('cancel','Einladung zurückziehen'):'';
   const roles=g.type==='chess'?`${esc(nameOf(g.creator))}: Weiß · ${esc(nameOf(g.opponent))}: Schwarz · dauerhaft gespeichert`:g.type==='dino-run'?'Dein Dino ist grün. Der andere ist lila.':`${esc(nameOf(g.creator))}: X / ● · ${esc(nameOf(g.opponent))}: O / ○`;
-  return `<div class="game-card ${g.type==='chess'?'chess-card':''}"><h3>${esc(name)}</h3><p role="status">${esc(status)}</p>${controls}${board}<p class="form-hint">${roles} · kostenlos</p></div>`;
+  return `<div class="game-card ${g.type==='chess'?'chess-card':''}"><h3>${esc(name)}</h3><p class="${g.status==='finished'?'game-result':''}" role="status">${esc(status)}</p>${controls}${board}<p class="form-hint">${roles} · kostenlos</p></div>`;
 }
 
 async function loadChatGames(expand = false) {
@@ -215,7 +236,8 @@ async function loadChatGames(expand = false) {
   const active = data.games.filter(g => ['invited', 'active'].includes(g.status));
   const button = $('#games-toggle'); if (button) { button.textContent = active.length ? `Spiele · ${active.length} offen` : 'Spiele · kostenlos'; button.setAttribute('aria-expanded', String(gamesVisible || !!active.length)); }
   container.hidden = !gamesVisible && !active.length;
-  const shown = active.length ? active : data.games.slice(0,1);
+  const shown = gamesForDisplay(data.games);
+  if(shown.some(g=>g.status==='finished')) { container.hidden=false; button?.setAttribute('aria-expanded','true'); }
   const signature = JSON.stringify([data.games.map(g => g.type === 'dino-run' && g.status === 'active' ? {id:g.id,version:g.version,status:g.status} : g), gamesVisible]);
   if (container.dataset.version === signature) return; container.dataset.version = signature;
   const nameOf = id => id === user.id ? 'Du' : chatPerson.name;

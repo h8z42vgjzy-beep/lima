@@ -1,6 +1,6 @@
 # F — Feindschaft. Aber mit Blumen.
 
-Aktueller Stand: **Update 7.2 / Version 1.4.2**. Das Langzeit-Schach und die ursprüngliche Upload-Anleitung stehen in [UPDATE-V7.md](UPDATE-V7.md). Update 7.2 korrigiert das Safari-Brett, die Figurendarstellung und die Zugauswahl; alle vorherigen Funktionen bleiben vollständig enthalten. Dieses Paket ist noch nicht auf Render veröffentlicht.
+Aktueller Stand: **Update 7.3 / Version 1.4.3**. Das Langzeit-Schach und die ursprüngliche Upload-Anleitung stehen in [UPDATE-V7.md](UPDATE-V7.md). Update 7.3 ergänzt SVG-Figuren, eine bleibende Ergebnisanzeige und mobile Bedienflächen; es korrigiert das Safari-Brett, die Figurendarstellung und die Zugauswahl; alle vorherigen Funktionen bleiben vollständig enthalten. Dieses Paket ist noch nicht auf Render veröffentlicht.
 
 Eine responsive Website für humorvolle Sprüche und freiwillige Wortduelle. Dunkle Gestaltung mit violetten und grünen Akzenten, animierten SVG-Blumen und einem Live-Dino-Duell im Chat. Die Website lädt keine externen Schriftarten oder Tracker.
 
