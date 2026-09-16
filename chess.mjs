@@ -86,7 +86,7 @@ function execute(state, move, side) {
   if (move.special === 'en-passant') board[move.to + (side === 1 ? 8 : -8)] = null;
   if (move.special === 'castle-k') { const rookFrom = side === 1 ? 63 : 7, rookTo = side === 1 ? 61 : 5; board[rookTo] = board[rookFrom]; board[rookFrom] = null; }
   if (move.special === 'castle-q') { const rookFrom = side === 1 ? 56 : 0, rookTo = side === 1 ? 59 : 3; board[rookTo] = board[rookFrom]; board[rookFrom] = null; }
-  if (piece.toLowerCase() === 'p' && (move.to < 8 || move.to >= 56)) board[move.to] = side === 1 ? 'Q' : 'q';
+  if (piece.toLowerCase() === 'p' && (move.to < 8 || move.to >= 56)) board[move.to] = side === 1 ? (move.promotion || 'q').toUpperCase() : (move.promotion || 'q');
   let rights = next.castling;
   if (piece === 'K') rights = rights.replace(/[KQ]/g, ''); if (piece === 'k') rights = rights.replace(/[kq]/g, '');
   if (move.from === 63 || move.to === 63) rights = rights.replace('K',''); if (move.from === 56 || move.to === 56) rights = rights.replace('Q','');
@@ -115,6 +115,9 @@ export function applyChessMove(original, side, input) {
   if (!Number.isInteger(from) || !Number.isInteger(to) || from < 0 || from > 63 || to < 0 || to > 63) throw [400, 'Wähle zuerst deine Figur und danach ihr Zielfeld.'];
   const move = legalMoves(original, side).find(candidate => candidate.from === from && candidate.to === to);
   if (!move) throw [400, 'Dieser Schachzug ist nicht erlaubt.'];
+  const promotes=original.board[from]?.toLowerCase()==='p'&&(to<8||to>=56);
+  if(promotes && !['q','r','b','n'].includes(input.promotion)) throw [400,'Wähle Dame, Turm, Läufer oder Springer zur Umwandlung.'];
+  if(promotes) move.promotion=input.promotion;
   const state = execute(original, move, side), enemy = side === 1 ? 2 : 1;
   state.check = inCheck(state.board, enemy);
   const replies = legalMoves(state, enemy);

@@ -1,6 +1,6 @@
 # F — Feindschaft. Aber mit Blumen.
 
-Aktueller Stand: **Update 7.3 / Version 1.4.3**. Das Langzeit-Schach und die ursprüngliche Upload-Anleitung stehen in [UPDATE-V7.md](UPDATE-V7.md). Update 7.3 ergänzt SVG-Figuren, eine bleibende Ergebnisanzeige und mobile Bedienflächen; es korrigiert das Safari-Brett, die Figurendarstellung und die Zugauswahl; alle vorherigen Funktionen bleiben vollständig enthalten. Dieses Paket ist noch nicht auf Render veröffentlicht.
+Aktueller Stand: **Update 7.4 / Version 1.4.4**. Das Langzeit-Schach und die ursprüngliche Upload-Anleitung stehen in [UPDATE-V7.md](UPDATE-V7.md). Update 7.4 ergänzt die Figurenauswahl bei der Bauernumwandlung. Update 7.3 ergänzt SVG-Figuren, eine bleibende Ergebnisanzeige und mobile Bedienflächen; es korrigiert das Safari-Brett, die Figurendarstellung und die Zugauswahl; alle vorherigen Funktionen bleiben vollständig enthalten. Dieses Paket ist noch nicht auf Render veröffentlicht.
 
 Eine responsive Website für humorvolle Sprüche und freiwillige Wortduelle. Dunkle Gestaltung mit violetten und grünen Akzenten, animierten SVG-Blumen und einem Live-Dino-Duell im Chat. Die Website lädt keine externen Schriftarten oder Tracker.
 
@@ -17,7 +17,7 @@ Eine responsive Website für humorvolle Sprüche und freiwillige Wortduelle. Dun
 - Kategorien sind verpflichtend auszuwählen und kostenlos anzulegen
 - Chat-Fotos sind kostenlos; einmaliger Zugriff der empfangenden Person für 20 Sekunden
 - Fünf kostenlose Einzelchatspiele: Langzeit-Schach, Live-Dino-Lauf, Tic-Tac-Toe, Vier gewinnt und Zahlenduell, jeweils mit Einladung und serverseitigen Regeln
-- Langzeit-Schach ohne Zugfrist: Stellung und letzter Zug bleiben serverseitig gespeichert; Schach, Schachmatt, Patt, Rochade, en passant, Aufgabe und automatische Damenumwandlung werden geprüft
+- Langzeit-Schach ohne Zugfrist: Stellung und letzter Zug bleiben serverseitig gespeichert; Schach, Schachmatt, Patt, Rochade, en passant, Aufgabe und Bauernumwandlung mit Auswahl von Dame, Turm, Läufer oder Springer werden geprüft
 - Eine Langzeit-Schachpartie und ein kurzes Spiel können im selben Einzelchat gleichzeitig offen sein
 - Fester Musikplayer außerhalb des Feeds, Abspielposition, Pause und Wiederherstellung nach Netzwerkfehlern
 - Reaktive Dino-Effekte und vier lokal gespeicherte Seiteneffekte zum Entdecken; ohne Guthabenwirkung

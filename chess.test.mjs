@@ -22,7 +22,7 @@ test('Chess: legal turns, illegal moves and Fool’s Mate are server-authoritati
   assert.equal(initialChessState().board[53],'P','original setup is not mutated');
 });
 
-test('Chess: castling, en passant and automatic queen promotion work',()=>{
+test('Chess: castling, en passant and explicit queen promotion work',()=>{
   let state={...initialChessState(),board:Array(64).fill(null),castling:'K',enPassant:null};
   state.board[60]='K';state.board[63]='R';state.board[4]='k';
   let moved=applyChessMove(state,1,{from:60,to:62}).state;
@@ -35,7 +35,7 @@ test('Chess: castling, en passant and automatic queen promotion work',()=>{
 
   state={...initialChessState(),board:Array(64).fill(null),castling:'',enPassant:null};
   state.board[60]='K';state.board[7]='k';state.board[8]='P';
-  moved=applyChessMove(state,1,{from:8,to:0}).state;assert.equal(moved.board[0],'Q');
+  moved=applyChessMove(state,1,{from:8,to:0,promotion:'q'}).state;assert.equal(moved.board[0],'Q');
 });
 
 test('Chess: stalemate is recognized as a draw',()=>{
@@ -43,4 +43,20 @@ test('Chess: stalemate is recognized as a draw',()=>{
   state.board[0]='k';state.board[18]='K';state.board[17]='Q';
   const result=applyChessMove(state,1,{from:17,to:10});
   assert.equal(result.won,false);assert.equal(result.draw,true);assert.equal(result.state.check,false);
+});
+
+
+test('Promotion requires a choice and supports all four pieces for both colours',()=>{
+ for(const side of [1,2]) {
+  const state={...initialChessState(),board:Array(64).fill(null),castling:'',enPassant:null};
+  state.board[60]='K';state.board[4]='k';const from=side===1?8:55,to=side===1?0:63;
+  state.board[from]=side===1?'P':'p';
+  for(const promotion of [undefined,'k','p','invalid'])assert.throws(()=>applyChessMove(state,side,{from,to,promotion}));
+  assert.equal(state.board[from],side===1?'P':'p');assert.equal(state.board[to],null);
+  for(const promotion of ['q','r','b','n']) {
+   const next=applyChessMove(state,side,{from,to,promotion});
+   assert.equal(next.state.board[to],side===1?promotion.toUpperCase():promotion);
+   assert.equal(next.state.board[from],null);
+  }
+ }
 });

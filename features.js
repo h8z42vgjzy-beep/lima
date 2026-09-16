@@ -205,7 +205,7 @@ function chessBoard(g, ownTurn) {
   return `<div class="chess-wrap"><div class="chess-board" data-chess-board="${g.id}" role="grid" aria-label="Schachbrett, ${white?'Weiß':'Schwarz'} unten">${order.map(square=>{
     const piece=g.state.board[square],x=square%8,y=Math.floor(square/8),last=g.state.lastMove&&(g.state.lastMove.from===square||g.state.lastMove.to===square),targets=legal.get(square)||[];
     const pieceClass=piece?(piece===piece.toUpperCase()?' piece-white':' piece-black'):'';
-    return `<button type="button" class="chess-square ${(x+y)%2?'dark':'light'}${last?' last-move':''}${pieceClass}" data-action="chess-square" data-id="${g.id}" data-version="${g.version}" data-square="${square}" data-own="${ownSide(piece)?'1':'0'}" data-targets="${targets.join(',')}" role="gridcell" aria-label="${file(square)}${rank(square)}${piece?' '+(piece===piece.toUpperCase()?'Weiß: ':'Schwarz: ')+chessNames[piece.toLowerCase()]:' frei'}" ${!ownTurn?'disabled':''}><span aria-hidden="true">${piece?chessPieceSVG(piece):''}</span>${((white&&x===0)||(!white&&x===7))?`<small>${rank(square)}</small>`:''}${((white&&y===7)||(!white&&y===0))?`<i>${file(square)}</i>`:''}</button>`;
+    return `<button type="button" class="chess-square ${(x+y)%2?'dark':'light'}${last?' last-move':''}${pieceClass}" data-action="chess-square" data-id="${g.id}" data-version="${g.version}" data-square="${square}" data-piece="${piece||''}" data-own="${ownSide(piece)?'1':'0'}" data-targets="${targets.join(',')}" role="gridcell" aria-label="${file(square)}${rank(square)}${piece?' '+(piece===piece.toUpperCase()?'Weiß: ':'Schwarz: ')+chessNames[piece.toLowerCase()]:' frei'}" ${!ownTurn?'disabled':''}><span aria-hidden="true">${piece?chessPieceSVG(piece):''}</span>${((white&&x===0)||(!white&&x===7))?`<small>${rank(square)}</small>`:''}${((white&&y===7)||(!white&&y===0))?`<i>${file(square)}</i>`:''}</button>`;
   }).join('')}</div><p class="chess-help">${g.status==='finished'?'Partie beendet. Das Endbrett bleibt hier sichtbar.':ownTurn?'Tippe zuerst deine Figur und danach das Zielfeld.':'Die Stellung bleibt gespeichert. Du kannst später zurückkommen.'}${g.state.check?' · SCHACH!':''}</p></div>`;
 }
 
@@ -255,6 +255,18 @@ async function sendGameAction(dataset) {
   if (dataset.column !== undefined) input.column = Number(dataset.column);
   try { await api('game-action', input); } finally { await loadChatGames(); }
 }
+function choosePromotion(white) {
+  return new Promise(resolve=>{
+    const dialog=document.createElement('dialog');
+    dialog.className='promotion-dialog';dialog.setAttribute('aria-labelledby','promotion-title');
+    dialog.innerHTML=`<h2 id="promotion-title">Bauer umwandeln</h2><p>Welche Figur möchtest du?</p><div class="promotion-choices">${['q','r','b','n'].map(piece=>`<button type="button" data-promotion="${piece}">${chessPieceSVG(white?piece.toUpperCase():piece)}<span>${chessNames[piece]}</span></button>`).join('')}</div><button type="button" class="mini-button" data-promotion="cancel">Zug abbrechen</button>`;
+    let choice=null;
+    dialog.addEventListener('click',event=>{const button=event.target.closest('[data-promotion]');if(!button)return;choice=button.dataset.promotion==='cancel'?null:button.dataset.promotion;dialog.close();});
+    dialog.addEventListener('close',()=>{dialog.remove();resolve(choice);},{once:true});
+    document.body.append(dialog);dialog.showModal();
+  });
+}
+
 async function chooseChessSquare(dataset) {
   const board=document.querySelector(`[data-chess-board="${Number(dataset.id)}"]`);if(!board)return;
   const current=board.dataset.from;
@@ -266,7 +278,17 @@ async function chooseChessSquare(dataset) {
   if(current===dataset.square){clear();return;}
   const targets=(board.dataset.targets||'').split(',').filter(Boolean);
   if(!targets.includes(dataset.square)){if(dataset.own==='1')select();else toast('Dieses Feld ist für die ausgewählte Figur nicht erreichbar.');return;}
-  try{await api('game-action',{game:Number(dataset.id),version:Number(dataset.version),action:'move',from:Number(current),to:Number(dataset.square)});}finally{await loadChatGames();}
+  if(board.dataset.submitting==='true')return;
+  board.dataset.submitting='true';
+  const request=chatId,fromPiece=board.querySelector(`[data-square="${Number(current)}"]`)?.dataset.piece;
+  try{
+    let promotion;
+    if(fromPiece?.toLowerCase()==='p'&&(Number(dataset.square)<8||Number(dataset.square)>=56)){
+      promotion=await choosePromotion(fromPiece==='P');
+      if(!promotion||chatId!==request||modalView!=='chat')return;
+    }
+    await api('game-action',{game:Number(dataset.id),version:Number(dataset.version),action:'move',from:Number(current),to:Number(dataset.square),...(promotion?{promotion}:{})});
+  }finally{delete board.dataset.submitting;await loadChatGames();}
 }
 
 async function showExtras(space = '') {

@@ -72,3 +72,21 @@ test('Chess result remains visible after finishing and alongside another active 
  assert.match(h.element('#chat-games').innerHTML,/data-chess-board="8"/);
  assert.equal(h.run(`gamesForDisplay([{id:10,type:'dino-run',status:'active'},{id:8,type:'chess',status:'finished'}]).length`),2);
 });
+
+test('Promotion waits for a choice, submits chosen knight, and cancellation sends no move',async()=>{
+ const h=ui();await h.ready;
+ const board=h.element('[data-chess-board="9"]');
+ board.dataset={from:'8',targets:'0'};
+ board.querySelector=()=>({dataset:{piece:'P'}});
+ h.run(`chatId=5;modalView='chat';globalThis.sent=[];
+ api=async(route,data)=>{sent.push(data);};loadChatGames=async()=>{};
+ choosePromotion=()=>new Promise(resolve=>{globalThis.resolvePromotion=resolve;});`);
+ const pending=h.run(`chooseChessSquare({id:'9',version:'3',square:'0'})`);
+ assert.equal(h.run('sent.length'),0);
+ h.run("resolvePromotion('n')");await pending;
+ assert.equal(h.run('sent[0].promotion'),'n');
+ assert.equal(h.run('sent[0].from'),8);assert.equal(h.run('sent[0].to'),0);
+ const cancelled=h.run(`chooseChessSquare({id:'9',version:'3',square:'0'})`);
+ h.run('resolvePromotion(null)');await cancelled;
+ assert.equal(h.run('sent.length'),1);
+});
