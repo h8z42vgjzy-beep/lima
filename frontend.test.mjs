@@ -42,4 +42,10 @@ test('UI wiring: mandatory category, media helpers load before app, games and ex
   assert.match(html,/Langzeit-Schach/);
   const features=readFileSync(new URL('public/features.js',import.meta.url),'utf8');
   assert.match(features,/data-action="chess-square"/);assert.match(features,/ohne Zeitlimit/);
+  const css=readFileSync(new URL('public/features.css',import.meta.url),'utf8');
+  assert.match(css,/grid-template-columns:repeat\(8,minmax\(0,1fr\)\)/);
+  assert.match(css,/grid-template-rows:repeat\(8,minmax\(0,1fr\)\)/);
+  assert.match(css,/\.chess-square\{[^}]*min-width:0;min-height:0/);
+  assert.match(css,/\.chess-square\.piece-white>span/);assert.match(css,/\.chess-square\.legal-target:after/);
+  assert.match(features,/data-targets="\$\{targets\.join\(','\)\}"/);
 });

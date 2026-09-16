@@ -180,9 +180,11 @@ function chessBoard(g, ownTurn) {
   const order = Array.from({length:64},(_,i)=>white?i:63-i);
   const ownSide = white ? piece => piece && piece === piece.toUpperCase() : piece => piece && piece === piece.toLowerCase();
   const file = square => 'abcdefgh'[square%8], rank = square => 8-Math.floor(square/8);
+  const legal = new Map((g.legalMoves||[]).map(move=>[move.from,move.targets]));
   return `<div class="chess-wrap"><div class="chess-board" data-chess-board="${g.id}" role="grid" aria-label="Schachbrett, ${white?'Weiß':'Schwarz'} unten">${order.map(square=>{
-    const piece=g.state.board[square],x=square%8,y=Math.floor(square/8),last=g.state.lastMove&&(g.state.lastMove.from===square||g.state.lastMove.to===square);
-    return `<button type="button" class="chess-square ${(x+y)%2?'dark':'light'}${last?' last-move':''}" data-action="chess-square" data-id="${g.id}" data-version="${g.version}" data-square="${square}" data-own="${ownSide(piece)?'1':'0'}" role="gridcell" aria-label="${file(square)}${rank(square)}${piece?' '+chessPieces[piece]:' frei'}" ${!ownTurn?'disabled':''}><span aria-hidden="true">${piece?chessPieces[piece]:''}</span>${((white&&x===0)||(!white&&x===7))?`<small>${rank(square)}</small>`:''}${((white&&y===7)||(!white&&y===0))?`<i>${file(square)}</i>`:''}</button>`;
+    const piece=g.state.board[square],x=square%8,y=Math.floor(square/8),last=g.state.lastMove&&(g.state.lastMove.from===square||g.state.lastMove.to===square),targets=legal.get(square)||[];
+    const pieceClass=piece?(piece===piece.toUpperCase()?' piece-white':' piece-black'):'';
+    return `<button type="button" class="chess-square ${(x+y)%2?'dark':'light'}${last?' last-move':''}${pieceClass}" data-action="chess-square" data-id="${g.id}" data-version="${g.version}" data-square="${square}" data-own="${ownSide(piece)?'1':'0'}" data-targets="${targets.join(',')}" role="gridcell" aria-label="${file(square)}${rank(square)}${piece?' '+chessPieces[piece]:' frei'}" ${!ownTurn?'disabled':''}><span aria-hidden="true">${piece?chessPieces[piece]:''}</span>${((white&&x===0)||(!white&&x===7))?`<small>${rank(square)}</small>`:''}${((white&&y===7)||(!white&&y===0))?`<i>${file(square)}</i>`:''}</button>`;
   }).join('')}</div><p class="chess-help">${ownTurn?'Tippe zuerst deine Figur und danach das Zielfeld.':'Die Stellung bleibt gespeichert. Du kannst später zurückkommen.'}${g.state.check?' · SCHACH!':''}</p></div>`;
 }
 
@@ -234,11 +236,14 @@ async function sendGameAction(dataset) {
 async function chooseChessSquare(dataset) {
   const board=document.querySelector(`[data-chess-board="${Number(dataset.id)}"]`);if(!board)return;
   const current=board.dataset.from;
+  const clear=()=>{delete board.dataset.from;delete board.dataset.targets;board.querySelectorAll('.chess-square').forEach(x=>x.classList.remove('selected','legal-target'));};
+  const select=()=>{const targets=(dataset.targets||'').split(',').filter(Boolean);if(dataset.own!=='1'||!targets.length){toast('Diese Figur kann gerade nicht ziehen.');return;}clear();board.dataset.from=dataset.square;board.dataset.targets=targets.join(',');board.querySelectorAll('.chess-square').forEach(x=>{x.classList.toggle('selected',x.dataset.square===dataset.square);x.classList.toggle('legal-target',targets.includes(x.dataset.square));});};
   if(current===undefined){
-    if(dataset.own!=='1'){toast('Wähle zuerst eine deiner eigenen Figuren.');return;}
-    board.dataset.from=dataset.square;board.querySelectorAll('.chess-square').forEach(x=>x.classList.toggle('selected',x.dataset.square===dataset.square));return;
+    if(dataset.own!=='1'){toast('Wähle zuerst eine deiner eigenen Figuren.');return;}select();return;
   }
-  if(current===dataset.square){delete board.dataset.from;board.querySelectorAll('.chess-square').forEach(x=>x.classList.remove('selected'));return;}
+  if(current===dataset.square){clear();return;}
+  const targets=(board.dataset.targets||'').split(',').filter(Boolean);
+  if(!targets.includes(dataset.square)){if(dataset.own==='1')select();else toast('Dieses Feld ist für die ausgewählte Figur nicht erreichbar.');return;}
   try{await api('game-action',{game:Number(dataset.id),version:Number(dataset.version),action:'move',from:Number(current),to:Number(dataset.square)});}finally{await loadChatGames();}
 }
 

@@ -106,6 +106,10 @@ function legalMoves(state, side) {
   return moves;
 }
 
+export function legalChessMoves(state, side) {
+  return legalMoves(state, side).map(({from,to})=>({from,to}));
+}
+
 export function applyChessMove(original, side, input) {
   const from = input.from, to = input.to;
   if (!Number.isInteger(from) || !Number.isInteger(to) || from < 0 || from > 63 || to < 0 || to > 63) throw [400, 'Wähle zuerst deine Figur und danach ihr Zielfeld.'];

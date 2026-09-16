@@ -1,6 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { initialChessState, applyChessMove } from './chess.mjs';
+import { initialChessState, applyChessMove, legalChessMoves } from './chess.mjs';
+
+test('Chess: every piece starts on the standard square and opening targets are correct',()=>{
+  const state=initialChessState();
+  assert.deepEqual(state.board.slice(0,8),['r','n','b','q','k','b','n','r']);
+  assert.deepEqual(state.board.slice(8,16),Array(8).fill('p'));
+  assert.deepEqual(state.board.slice(48,56),Array(8).fill('P'));
+  assert.deepEqual(state.board.slice(56),['R','N','B','Q','K','B','N','R']);
+  const moves=legalChessMoves(state,1);
+  assert.equal(moves.length,20);assert.deepEqual(moves.filter(x=>x.from===52).map(x=>x.to).sort((a,b)=>a-b),[36,44]);
+});
 
 test('Chess: legal turns, illegal moves and Fool’s Mate are server-authoritative',()=>{
   let state=initialChessState(),result;

@@ -1,6 +1,6 @@
 import { randomInt } from 'node:crypto';
 import { initialDinoState } from './dino.mjs';
-import { initialChessState, applyChessMove } from './chess.mjs';
+import { initialChessState, applyChessMove, legalChessMoves } from './chess.mjs';
 
 export const gameCatalog = [
   { type: 'dino-run', name: 'Dino-Duell · live', description: 'Zwei Spuren, eine Strecke. Gemeinsam starten und über Kakteen springen.' },
@@ -73,11 +73,19 @@ export function createGameService({ db, one, all, run, now, chatAccess }) {
   DROP INDEX IF EXISTS one_live_game;
   CREATE UNIQUE INDEX IF NOT EXISTS one_live_chess ON chat_games(request_id) WHERE type='chess' AND status IN('invited','active');
   CREATE UNIQUE INDEX IF NOT EXISTS one_live_quick_game ON chat_games(request_id) WHERE type<>'chess' AND status IN('invited','active');`);
-  const expose = g => ({ ...g, state: visibleState(g.type, JSON.parse(g.state), g.status === 'finished') });
+  const expose = (g, viewer) => {
+    const state=visibleState(g.type,JSON.parse(g.state),g.status==='finished'),result={...g,state};
+    if(g.type==='chess'&&g.status==='active'&&g.turn===viewer){
+      const side=g.creator===viewer?1:2,grouped=new Map();
+      for(const move of legalChessMoves(state,side)){if(!grouped.has(move.from))grouped.set(move.from,[]);grouped.get(move.from).push(move.to);}
+      result.legalMoves=[...grouped].map(([from,targets])=>({from,targets}));
+    }
+    return result;
+  };
   return {
     list(user, request) {
       chatAccess(user, request);
-      return { catalog: gameCatalog, games: all('SELECT * FROM chat_games WHERE request_id=? ORDER BY id DESC LIMIT 12', request).map(expose) };
+      return { catalog: gameCatalog, games: all('SELECT * FROM chat_games WHERE request_id=? ORDER BY id DESC LIMIT 12', request).map(g=>expose(g,user.id)) };
     },
     create(user, request, type) {
       const chat = chatAccess(user, request);
@@ -90,7 +98,7 @@ export function createGameService({ db, one, all, run, now, chatAccess }) {
       if (type === 'dino-run' && one("SELECT id FROM chat_games WHERE type='dino-run' AND status IN('invited','active') AND (creator IN(?,?) OR opponent IN(?,?))", user.id, opponent, user.id, opponent)) throw [409, 'Eine Person hat bereits eine offene Dino-Runde. Beendet sie zuerst.'];
       const state = initialState(type);
       const id = Number(run('INSERT INTO chat_games(request_id,type,creator,opponent,state,created,updated) VALUES(?,?,?,?,?,?,?)', request, type, user.id, opponent, JSON.stringify(state), now(), now()).lastInsertRowid);
-      return { game: expose(one('SELECT * FROM chat_games WHERE id=?', id)) };
+      return { game: expose(one('SELECT * FROM chat_games WHERE id=?', id),user.id) };
     },
     action(user, input) {
       const g = one('SELECT * FROM chat_games WHERE id=?', input.game);
@@ -113,7 +121,7 @@ export function createGameService({ db, one, all, run, now, chatAccess }) {
         const next = applyMove(g.type, JSON.parse(g.state), g.creator === user.id ? 1 : 2, input);
         run('UPDATE chat_games SET state=?,status=?,winner=?,turn=?,version=version+1,updated=? WHERE id=?', JSON.stringify(next.state), next.won || next.draw ? 'finished' : 'active', next.won ? user.id : null, g.turn === g.creator ? g.opponent : g.creator, now(), g.id);
       } else throw [400, 'Ungültige Spielaktion.'];
-      return { game: expose(one('SELECT * FROM chat_games WHERE id=?', g.id)) };
+      return { game: expose(one('SELECT * FROM chat_games WHERE id=?', g.id),user.id) };
     },
   };
 }

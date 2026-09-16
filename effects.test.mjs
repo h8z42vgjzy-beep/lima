@@ -6,7 +6,7 @@ const read = name => readFileSync(new URL(name, import.meta.url), 'utf8');
 
 test('Effects release wires every local asset and respects reduced-motion settings', () => {
   const html=read('public/index.html'),server=read('server.mjs'),css=read('public/action.css');
-  assert.match(html,/name="f-release" content="7"/);
+  assert.match(html,/name="f-release" content="7.2"/);
   for(const file of ['music-player.js','dino-client.js','discovery-effects.js','features.js','app.js']){
     assert.match(html,new RegExp(`src="/${file.replace('.','\\.')}"`));
     assert.match(server,new RegExp(`/${file.replace('.','\\.')}`));

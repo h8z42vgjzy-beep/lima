@@ -210,7 +210,8 @@ test('Multiplayer games require consent and enforce turns, membership, versions 
     if(g.status==='active')await alice.call('game-action',{game:g.id,version:g.version,action:'cancel'});
   }
   const persisted=(await bob.call('games?request='+rid)).data.games.find(x=>x.id===chess.id);
-  assert.equal(persisted.status,'active');assert.equal(persisted.state.board[36],'P');
+  assert.equal(persisted.status,'active');assert.equal(persisted.state.board[36],'P');assert.ok(persisted.legalMoves.length>0);
+  const whiteView=(await alice.call('games?request='+rid)).data.games.find(x=>x.id===chess.id);assert.equal(whiteView.legalMoves,undefined);
   chess=(await bob.call('game-action',{game:chess.id,version:persisted.version,action:'resign'})).data.game;
   assert.equal(chess.status,'finished');assert.equal(chess.winner,alice.id);
   assert.equal(await alice.balance(),0);assert.equal(await bob.balance(),0);
