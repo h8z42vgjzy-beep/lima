@@ -10,7 +10,7 @@ export function createResetService({all,one,run,transact,now,storageInfo,removeM
   }
   function publish(event){
     const packet=`event: feed-reset\ndata: ${JSON.stringify(event)}\n\n`;
-    for(const client of clients)if(!client.destroyed&&!client.writableEnded)client.write(packet);
+    for(const client of clients)if(!client.destroyed&&!client.writableEnded)client.write(`event: feed-reset\ndata: ${JSON.stringify({...event,canClose:client.resetCanClose})}\n\n`);
   }
   function preview(){
     const running=current();if(running)return running;
@@ -19,11 +19,12 @@ export function createResetService({all,one,run,transact,now,storageInfo,removeM
     const event={id:Number(result.lastInsertRowid),created,startAt:created+RESET_LEAD_MS,ends,preview:true,serverNow:created};
     publish(event);return event;
   }
-  function stream(req,res) {
+  function stream(req,res,actor=null) {
+    res.resetCanClose=!!actor?.is_admin&&String(actor.name).toLowerCase()==='lima';
     res.writeHead(200,{'Content-Type':'text/event-stream; charset=utf-8','Cache-Control':'no-store, no-transform','Connection':'keep-alive','X-Accel-Buffering':'no'});
     res.write(`event: ready\ndata: ${JSON.stringify({serverNow:now()})}\n\n`);
     clients.add(res);
-    const active=current();if(active)res.write(`event: feed-reset\ndata: ${JSON.stringify(active)}\n\n`);
+    const active=current();if(active)res.write(`event: feed-reset\ndata: ${JSON.stringify({...active,canClose:res.resetCanClose})}\n\n`);
     const heartbeat=setInterval(()=>res.write(': keepalive\n\n'),15000);heartbeat.unref?.();
     res.on('close',()=>{clearInterval(heartbeat);clients.delete(res);});
   }

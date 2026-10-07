@@ -14,3 +14,15 @@ html body dialog.feed-reset-dialog{position:fixed;inset:0;width:100vw;max-width:
 .reset-toolbar button.needs-tap{background:#baf6cf;color:#0b2416;border-color:#d4ffe3;font-weight:700}
 
 .feed-reset-dialog video{object-fit:contain;background:#000}
+
+body.reset-playing{overflow:hidden}
+.feed-reset-dialog .reset-stage{position:relative;width:100%;height:100%;background:#000;overflow:hidden}
+.feed-reset-dialog .reset-stage:fullscreen{width:100vw;height:100dvh;background:#000}
+.feed-reset-dialog .reset-stage:-webkit-full-screen{width:100vw;height:100vh;background:#000}
+.feed-reset-dialog video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;transform:none}
+.feed-reset-dialog .reset-toolbar{border:0;background:linear-gradient(#000c,#0000);min-height:0;opacity:.85}
+.feed-reset-dialog .reset-status{background:#0009}
+@media(max-width:600px){.feed-reset-dialog .reset-toolbar{min-height:0;flex-wrap:nowrap}.feed-reset-dialog .reset-mode{display:none}.feed-reset-dialog .reset-toolbar>div{justify-content:center}.feed-reset-dialog video{top:0;height:100%;width:100%}}
+@media(orientation:portrait) and (pointer:coarse){
+ .feed-reset-dialog video{inset:auto;top:50%;left:50%;width:100dvh;height:100vw;max-width:none;max-height:none;transform:translate(-50%,-50%) rotate(90deg);object-fit:contain}
+}

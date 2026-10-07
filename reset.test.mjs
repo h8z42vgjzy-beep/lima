@@ -26,7 +26,7 @@ async function app(t){
  function report(type,id){return Number(run('INSERT INTO reports(reporter,target_type,target_id,reason,created) VALUES(?,?,?,?,?)',reporter.id,type,id,'Testmeldung',Date.now()).lastInsertRowid);}
  async function call(route,actor=owner,data){const res=await fetch(base+'/api/'+route,{method:data?'POST':'GET',headers:{Cookie:actor.cookie,...data?{'X-F-Request':'1'}:{}},body:data});return {status:res.status,data:await res.json()};}
  async function upload(bytes=100){const b=Buffer.alloc(bytes);b.write('RIFF');b.writeUInt32LE(bytes-8,4);b.write('WAVEfmt ',8);b.writeUInt32LE(16,16);b.writeUInt16LE(1,20);b.writeUInt16LE(1,22);b.writeUInt32LE(8000,24);b.writeUInt32LE(16000,28);b.writeUInt16LE(2,32);b.writeUInt16LE(16,34);b.write('data',36);b.writeUInt32LE(bytes-44,40);const f=new FormData();for(const [k,v]of Object.entries({body:'Ein Testklang.',category:one('SELECT id FROM categories LIMIT 1').id,rights:'true',expectedPrice:0,uploadToken:randomUUID()}))f.set(k,String(v));f.set('file',new Blob([b],{type:'audio/wav'}),'test.wav');return call('upload-post',owner,f);}
- async function stream(){const abort=new AbortController();controllers.push(abort);const response=await fetch(base+'/api/reset-stream',{signal:abort.signal});assert.equal(response.status,200);const reader=response.body.getReader(),events=[];let buffer='';const waiters=[];
+ async function stream(actor){const abort=new AbortController();controllers.push(abort);const response=await fetch(base+'/api/reset-stream',{signal:abort.signal,headers:actor?{Cookie:actor.cookie}:{}});assert.equal(response.status,200);const reader=response.body.getReader(),events=[];let buffer='';const waiters=[];
  const task=(async()=>{try{while(true){const r=await reader.read();if(r.done)break;buffer+=new TextDecoder().decode(r.value);let at;while((at=buffer.indexOf('\n\n'))>=0){const chunk=buffer.slice(0,at);buffer=buffer.slice(at+2);const name=/event: (.+)/.exec(chunk)?.[1],data=/data: (.+)/.exec(chunk)?.[1];if(name&&data){events.push({name,data:JSON.parse(data)});for(const f of waiters)f();}}}}catch(e){if(!abort.signal.aborted)throw e;}})();
  const wait=name=>new Promise((resolve,reject)=>{const timeout=setTimeout(()=>reject(Error('No event: '+name)),2500);const check=()=>{const e=events.find(e=>e.name===name);if(e){clearTimeout(timeout);resolve(e.data);}};waiters.push(check);check();});await wait('ready');return {events,wait,close:()=>abort.abort(),task};}
  return {dir,base,db,run,one,all,owner,reporter,third,admin,post,media,report,call,upload,stream,errors:()=>errors};
@@ -146,4 +146,16 @@ test('Admin live test broadcasts, late joins share timeline, no deletion, no rep
  assert.equal((await h.call('admin/reset-preview',h.admin,'{}')).data.event.id,event.id);
  h.run('UPDATE reset_events SET ends=? WHERE id=?',Date.now()-1,event.id);
  const after=await h.stream();assert.deepEqual(after.events.map(x=>x.name),['ready']);
+});
+
+test('Only Lima main admin receives close control, including late joiners',async t=>{
+ const h=await app(t);h.run('UPDATE users SET name=? WHERE id=?','Lima',h.admin.id);
+ const main=await h.stream(h.admin),member=await h.stream(h.owner),guest=await h.stream();
+ const result=await h.call('admin/reset-preview',h.admin,'{}');assert.equal(result.data.event.canClose,true);
+ assert.equal((await main.wait('feed-reset')).canClose,true);
+ assert.equal((await member.wait('feed-reset')).canClose,false);assert.equal((await guest.wait('feed-reset')).canClose,false);
+ const late=await h.stream(h.admin);assert.equal((await late.wait('feed-reset')).canClose,true);
+ const source=readFileSync(new URL('public/reset-animation.js',import.meta.url),'utf8');
+ assert.match(source,/hidden=!canClose/);assert.match(source,/e.preventDefault\(\);if\(canClose\)close\(\)/);
+ assert.match(source,/stage.requestFullscreen/);assert.match(source,/orientation.lock\('landscape'\)/);
 });

@@ -179,7 +179,7 @@ const server=http.createServer(async(req,res)=>{
       if(route==='feed')return send(200,{posts:feedRows(user?.id||0),members:one('SELECT COUNT(*) AS n FROM users WHERE demo=0').n});
       if(route==='categories')return send(200,{categories:all('SELECT c.*,u.name AS creator_name FROM categories c LEFT JOIN users u ON u.id=c.creator ORDER BY c.name COLLATE NOCASE').map(c=>({...c,photo_price:photoPrice(c)}))});
       if(route==='event')return send(200,{event:null}); // Old clients must never replay a reset.
-      if(route==='reset-stream')return resetService.stream(req,res);
+      if(route==='reset-stream')return resetService.stream(req,res,user);
       if(!user)throw [401,'Melde dich an, um mitzumachen.'];
       if(route==='wallet')return send(200,{...wallet(user.id),entries:all('SELECT description,amount_half/2.0 AS amount,created FROM wallet_entries WHERE user_id=? ORDER BY id DESC LIMIT 50',user.id)});
       if(route==='games')return send(200,games.list(user,idField(Object.fromEntries(url.searchParams),'request')));
@@ -231,7 +231,7 @@ const server=http.createServer(async(req,res)=>{
     if(route==='admin/reset-preview'){
       if(!user?.is_admin)throw [403,'Nur für die Moderation.'];
       rate('reset-preview:'+user.id,6);req.resume();
-      return send(200,{event:resetService.preview()});
+      return send(200,{event:{...resetService.preview(),canClose:!!user.is_admin&&user.name.toLowerCase()==='lima'}});
     }
     const contentType=req.headers['content-type']||'';
     if(contentType.startsWith('multipart/form-data')){

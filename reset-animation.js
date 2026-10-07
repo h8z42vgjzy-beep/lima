@@ -121,16 +121,27 @@ let active=null;
 function play(event={},options={}){
  if(!scope.document)return;
  active?.close();
- const doc=scope.document,preview=!!options.preview,previousFocus=doc.activeElement;
+ const doc=scope.document,preview=!!options.preview,previousFocus=doc.activeElement,canClose=event.canClose===true;
  const dialog=doc.createElement('dialog');dialog.className='feed-reset-dialog';
  dialog.setAttribute('aria-label',preview?'Reset-Film Vorschau ohne Löschen':'Feed Reset – Live-Ereignis');
- dialog.innerHTML='<div class="reset-toolbar"><span class="reset-mode"></span><div><button type="button" data-reset="sound">Ton aus</button><button type="button" data-reset="skip">+10 Sekunden</button><button type="button" data-reset="close">Schließen ×</button></div></div><video playsinline preload="auto" aria-label="Feed Water Reset mit Originalton"></video><p class="reset-status" role="status"></p>';
+ dialog.innerHTML='<div class="reset-stage"><div class="reset-toolbar"><span class="reset-mode"></span><div><button type="button" data-reset="fullscreen">Vollbild · Querformat</button><button type="button" data-reset="sound">Ton aus</button><button type="button" data-reset="skip">+10 Sekunden</button><button type="button" data-reset="close">Schließen ×</button></div></div><video playsinline preload="auto" aria-label="Feed Water Reset mit Originalton"></video><p class="reset-status" role="status"></p></div>';
  dialog.querySelector('.reset-mode').textContent=preview?'LIVE-TEST · OHNE LÖSCHEN':'LIVE · FEED RESET';
+ dialog.querySelector('[data-reset="close"]').hidden=!canClose;
  dialog.querySelector('[data-reset="skip"]').hidden=!preview||!!options.shared;
  const video=dialog.querySelector('video'),status=dialog.querySelector('.reset-status'),sound=dialog.querySelector('[data-reset="sound"]');
  video.src='/reset-film.mp4';video.volume=.7;
  const base=scope.performance.now(),offset=preview&&!options.shared?0:Number(event.serverNow)-Number(event.startAt);
- let skipped=0,closed=false,started=false,timer=0;
+ let skipped=0,closed=false,started=false,timer=0,orientationLocked=false;
+ const stage=dialog.querySelector('.reset-stage');
+ async function fullscreen(){
+  try{
+   if(stage.requestFullscreen)await stage.requestFullscreen({navigationUI:'hide'});
+   else if(stage.webkitRequestFullscreen)stage.webkitRequestFullscreen();
+   else if(video.webkitEnterFullscreen){video.webkitEnterFullscreen();return;}
+   else throw Error('unsupported');
+   if(scope.screen?.orientation?.lock){try{await scope.screen.orientation.lock('landscape');orientationLocked=true;}catch{}}
+  }catch{status.textContent='Für Querformat das Handy drehen. Vollbild wird von diesem Browser nicht unterstützt oder blockiert.';}
+ }
  const elapsed=()=>Math.max(0,(scope.performance.now()-base+(Number.isFinite(offset)?offset:0)+skipped)/1000);
  const ready=()=>(preview&&!options.shared)||scope.performance.now()-base+offset>=0;
  function align(force=false){if(video.readyState<1||video.seeking)return;const target=Math.min(elapsed(),Math.max(0,video.duration-.05));if(force||Math.abs(video.currentTime-target)>1.5)video.currentTime=target;}
@@ -140,18 +151,19 @@ function play(event={},options={}){
    try{await video.play();if(closed){video.pause();return;}status.textContent=video.muted?'Für Originalmusik und Stimme auf „Ton an“ tippen.':'';}
    catch(error){if(closed)return;if(error.name==='NotAllowedError'&&!video.muted){video.muted=true;label();return start();}status.textContent='Video konnte nicht starten. Tippe oben auf „Ton an“. ';started=false;}
  }
- function close(){if(closed)return;closed=true;scope.clearInterval(timer);video.pause();video.removeAttribute('src');video.load();if(dialog.open)dialog.close();dialog.remove();if(active?.dialog===dialog)active=null;previousFocus?.focus?.();options.onEnd?.();}
+ function close(){if(closed)return;closed=true;if(orientationLocked)scope.screen?.orientation?.unlock?.();if(doc.fullscreenElement===stage)doc.exitFullscreen?.().catch(()=>{});doc.body.classList.remove('reset-playing');scope.clearInterval(timer);video.pause();video.removeAttribute('src');video.load();if(dialog.open)dialog.close();dialog.remove();if(active?.dialog===dialog)active=null;previousFocus?.focus?.();options.onEnd?.();}
  video.addEventListener('loadedmetadata',()=>align(true));
  video.addEventListener('waiting',()=>{status.textContent='Video lädt …';});
  video.addEventListener('playing',()=>{status.textContent=video.muted?'Für Originalmusik und Stimme auf „Ton an“ tippen.':'';});
  video.addEventListener('error',()=>{status.textContent='Video nicht geladen. Prüfe, ob reset-film.mp4 mit hochgeladen wurde.';});
  dialog.addEventListener('click',e=>{const b=e.target.closest('[data-reset]');if(!b)return;
-   if(b.dataset.reset==='close')close();
+   if(b.dataset.reset==='close'&&canClose)close();
+   if(b.dataset.reset==='fullscreen')fullscreen();
    if(b.dataset.reset==='skip'&&preview){skipped+=10000;align(true);}
-   if(b.dataset.reset==='sound'){video.muted=!video.muted;label();if(ready())start();}
+   if(b.dataset.reset==='sound'){fullscreen();video.muted=!video.muted;label();if(ready())start();}
  });
- dialog.addEventListener('cancel',e=>{e.preventDefault();close();});
- doc.body.append(dialog);dialog.showModal();label();active={dialog,close,preview};
+ dialog.addEventListener('cancel',e=>{e.preventDefault();if(canClose)close();});
+ doc.body.classList.add('reset-playing');doc.body.append(dialog);dialog.showModal();label();active={dialog,close,preview};
  const tick=()=>{if(closed)return;if(elapsed()>=136){close();return;}if(ready()){if(!started)start();else if(!video.paused)align();}else status.textContent='Die Sequenz startet gleich.';};
  timer=scope.setInterval(tick,500);tick();return active;
 }
