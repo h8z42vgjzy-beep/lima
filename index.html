@@ -2,12 +2,12 @@
 <html lang="de">
 <head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="f-release" content="7.4">
+  <meta name="f-release" content="7.7">
   <meta name="theme-color" content="#22242a"><meta name="robots" content="noindex,nofollow">
   <meta name="description" content="F steht für Feindschaft. Teile freche Sprüche, verteile Blumen und finde Menschen mit deinem Humor.">
   <title>F — Feindschaft. Aber mit Blumen.</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="/night.css">
-  <link rel="stylesheet" href="/features.css"><link rel="stylesheet" href="/action.css">
+  <link rel="stylesheet" href="/reset-animation.css"><link rel="stylesheet" href="/features.css"><link rel="stylesheet" href="/action.css">
 </head>
 <body>
   <a class="skip" href="#feed">Zum Feed</a>
@@ -55,7 +55,6 @@
   </main>
   <dialog id="modal" aria-labelledby="modal-title"><button class="modal-close" data-action="close" aria-label="Schließen">×</button><div id="modal-content"></div></dialog>
   <div id="toast" role="status" aria-live="polite"></div>
-  <div id="reset-event" hidden aria-live="assertive"><div class="reset-core">✳</div><strong>FEED WIRD ZURÜCKGESETZT</strong><span>Die Blumen sortieren sich neu.</span></div>
   <section id="music-dock" class="music-dock" aria-label="Musikplayer" hidden>
     <audio id="persistent-audio" preload="metadata"></audio>
     <div class="dock-record" aria-hidden="true">♫</div><div class="dock-track"><strong data-player="title"></strong><span data-player="artist"></span></div>
@@ -64,5 +63,6 @@
     <button class="mini-button" data-player="retry" hidden>Erneut laden</button><button class="dock-close" data-player="close" aria-label="Musik beenden">×</button><p data-player="notice" role="status"></p>
   </section>
   <script src="/music-player.js" defer></script><script src="/dino-client.js" defer></script><script src="/discovery-effects.js" defer></script>
+  <script src="/reset-audio.js" defer></script><script src="/reset-animation.js" defer></script><script src="/reset-live.js" defer></script>
   <script src="/features.js" defer></script><script src="/app.js" defer></script>
 </body></html>

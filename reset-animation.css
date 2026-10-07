@@ -1,0 +1,16 @@
+/* Scoped after all general/mobile dialog rules. */
+html body dialog.feed-reset-dialog{position:fixed;inset:0;width:100vw;max-width:none;height:100dvh;max-height:none;margin:0;padding:0;border:0;border-radius:0;background:#020605;color:#d8f5e5;overflow:hidden;box-sizing:border-box}
+.feed-reset-dialog::backdrop{background:#020605}
+.feed-reset-dialog .reset-toolbar{position:absolute;top:0;left:0;right:0;min-height:58px;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:max(8px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) 8px max(12px,env(safe-area-inset-left));box-sizing:border-box;border-bottom:1px solid #255839;background:#07130b;z-index:2}
+.reset-toolbar .reset-mode{font:700 11px/1.4 monospace;color:#90d9ab;letter-spacing:.08em}
+.reset-toolbar>div{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.reset-toolbar button{border:1px solid #548869;color:#e0ffec;background:#102719;min-height:42px;padding:8px 12px;border-radius:6px;font:12px/1.2 system-ui;cursor:pointer}
+.reset-toolbar button:focus-visible{outline:3px solid #d7ff8f;outline-offset:2px}
+.reset-toolbar button[hidden]{display:none}
+.feed-reset-dialog canvas,.feed-reset-dialog video{position:absolute;top:calc(62px + env(safe-area-inset-top));left:0;display:block;width:100%;height:calc(100% - 96px - env(safe-area-inset-top) - env(safe-area-inset-bottom))}
+.feed-reset-dialog .reset-status{position:absolute;bottom:env(safe-area-inset-bottom);left:8px;right:8px;margin:0;height:30px;text-align:center;color:#87b898;font:11px/30px monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media(max-width:600px){.feed-reset-dialog .reset-toolbar{flex-wrap:wrap;min-height:94px;align-content:center}.reset-toolbar .reset-mode{width:100%;text-align:center}.reset-toolbar>div{width:100%;justify-content:center}.reset-toolbar button{min-height:44px;font-size:12px;padding:8px 10px}.feed-reset-dialog canvas,.feed-reset-dialog video{top:calc(96px + env(safe-area-inset-top));height:calc(100% - 128px - env(safe-area-inset-top) - env(safe-area-inset-bottom))}}
+
+.reset-toolbar button.needs-tap{background:#baf6cf;color:#0b2416;border-color:#d4ffe3;font-weight:700}
+
+.feed-reset-dialog video{object-fit:contain;background:#000}

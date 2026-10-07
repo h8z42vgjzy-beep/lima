@@ -9,6 +9,7 @@ import { createGameService } from './games.mjs';
 import { validateMedia } from './media-validation.mjs';
 import { createExtrasService } from './extras.mjs';
 import { createDinoService } from './dino.mjs';
+import { createResetService } from './reset-service.mjs';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 // Render serves the files from public/. GitHub's mobile uploader can flatten that
@@ -16,7 +17,7 @@ const root = path.dirname(fileURLToPath(import.meta.url));
 const staticCandidates = [path.join(root, 'public'), root];
 // A complete new client takes priority over an old copy in the other layout.
 const staticRoot = staticCandidates.filter(directory => {
-  return ['index.html','music-player.js','dino-client.js','discovery-effects.js','action.css','features.js','app.js'].every(file=>existsSync(path.join(directory,file)));
+  return ['index.html','music-player.js','dino-client.js','discovery-effects.js','reset-animation.js','reset-audio.js','reset-soundtrack.mp3','reset-film.mp4','reset-live.js','reset-animation.css','action.css','features.js','app.js'].every(file=>existsSync(path.join(directory,file)));
 }).sort((a,b)=>{
   const version=directory=>Number(readFileSync(path.join(directory,'index.html'),'utf8').match(/name="f-release" content="([0-9.]+)"/)?.[1]||0);
   return version(b)-version(a);
@@ -129,15 +130,15 @@ function requireActive(u){if(isSuspended(u))throw [403,'Dein Konto ist bis '+new
 function storageInfo(){const configured=Number(process.env.F_STORAGE_BYTES);try{const s=statfsSync(mediaDir),actual=Number(s.blocks)*Number(s.bsize);return {used:mediaBytes(),total:configured>0?Math.min(actual,configured):actual,available:Number(s.bavail)*Number(s.bsize)};}catch{return {used:mediaBytes(),total:configured>0?configured:10*1024**3,available:null};}}
 function mediaBytes(){return (one('SELECT COALESCE(SUM(bytes),0) AS n FROM media WHERE removed=0')?.n||0)+(one('SELECT COALESCE(SUM(bytes),0) AS n FROM documents')?.n||0);}
 function reserveStorage(bytes){const s=storageInfo();if(s.used+bytes>s.total*.95||(s.available!==null&&s.available<bytes+16*1024**2))throw [507,'Für diese Datei ist gerade nicht genug freier Speicher vorhanden. Es wurde nichts abgebucht.'];}
-function removeMedia(m){try{unlinkSync(path.join(mediaDir,m.file_name));}catch{}run('UPDATE media SET removed=1 WHERE id=?',m.id);}
+function removeMedia(m){try{unlinkSync(path.join(mediaDir,m.file_name));}catch(e){if(e.code!=='ENOENT')throw e;}run('UPDATE media SET removed=1 WHERE id=?',m.id);}
 function cleanupExpired(){const t=now();for(const m of all('SELECT * FROM media WHERE removed=0 AND expires<?',t))removeMedia(m);run('UPDATE posts SET deleted=1 WHERE deleted=0 AND expires IS NOT NULL AND expires<? AND id NOT IN(SELECT target_id FROM reports WHERE target_type=\'post\' AND status=\'open\')',t);}
 function reportAllowsMedia(r,m){if(r.target_type==='media')return r.target_id===m.id;if(r.target_type==='post')return r.target_id===m.post_id;if(r.target_type==='comment')return one('SELECT post_id FROM comments WHERE id=?',r.target_id)?.post_id===m.post_id;if(r.target_type==='message')return one('SELECT media_id FROM messages WHERE id=?',r.target_id)?.media_id===m.id;if(r.target_type==='user'&&m.request_id){const q=one('SELECT * FROM requests WHERE id=?',m.request_id);return q&&[q.sender,q.receiver].includes(r.reporter)&&[q.sender,q.receiver].includes(r.target_id);}return r.target_type==='user'&&!!m.post_id&&m.owner_id===r.target_id;}
-function triggerReset(){const t=now(),reports=all("SELECT * FROM reports WHERE status='open'");transact(()=>{for(const m of all('SELECT * FROM media WHERE removed=0'))if(!reports.some(r=>reportAllowsMedia(r,m)))removeMedia(m);run("UPDATE posts SET deleted=1 WHERE space='feed' AND deleted=0 AND id NOT IN(SELECT target_id FROM reports WHERE target_type='post' AND status='open')");run('INSERT INTO reset_events(created,ends) VALUES(?,?)',t,t+90000);});}
-function checkStorage(){cleanupExpired();const s=storageInfo();if(s.total&&s.used/s.total>=.85){triggerReset();return true;}return false;}
+const resetService=createResetService({all,one,run,transact,now,storageInfo,removeMedia,cleanupExpired,reportAllowsMedia});
+function checkStorage(){try{return resetService.check();}catch(e){console.error('Speicherbereinigung fehlgeschlagen:',e);return null;}}
 function saveMedia(owner,file,{postId=null,requestId=null,price=0}){const {kind,mime}=validateMedia(file);const name=fileNameFor(file);try{writeFileSync(path.join(mediaDir,name),file.data,{mode:0o600,flag:'wx'});const id=run('INSERT INTO media(owner_id,post_id,request_id,file_name,original_name,mime,kind,bytes,created,expires,open_price) VALUES(?,?,?,?,?,?,?,?,?,?,?)',owner.id,postId,requestId,name,file.name.slice(0,150),mime,kind,file.data.length,now(),now()+28*DAY,price).lastInsertRowid;return Number(id);}catch(e){try{unlinkSync(path.join(mediaDir,name));}catch{}throw e;}}
 function mediaAccess(user,id){if(!user)throw [401,'Bitte melde dich zum Öffnen an.'];const m=one('SELECT * FROM media WHERE id=? AND removed=0',id);if(!m||m.expires<=now())throw [410,'Diese Datei ist nicht mehr verfügbar.'];if(blocked(user.id,m.owner_id))throw [404,'Diese Datei ist nicht verfügbar.'];if(m.request_id){chatAccess(user,m.request_id);if(now()>=m.created+7*DAY)throw [410,'Dieses Chat-Foto ist abgelaufen.'];}else if(m.post_id)postAccess(user.id,m.post_id);else throw [404,'Datei nicht gefunden.'];return m;}
 function mediaContent(m){try{return readFileSync(path.join(mediaDir,m.file_name));}catch{throw [410,'Die Bilddatei ist nicht mehr vorhanden. Es wurde nichts abgebucht.'];}}
-function sendMedia(req,res,m){const full=path.join(mediaDir,m.file_name);let size;try{size=statSync(full).size;}catch{throw [410,'Diese Datei ist nicht mehr vorhanden.'];}const headers={'Content-Type':m.mime,'Cache-Control':'private, no-store, max-age=0','Accept-Ranges':'bytes'};const range=req.headers.range;let start=0,end=size-1,status=200;if(range){const match=/^bytes=(\d*)-(\d*)$/.exec(range);if(!match||(!match[1]&&!match[2]))throw [416,'Ungültiger Dateibereich.'];if(!match[1])start=Math.max(0,size-Number(match[2]));else start=Number(match[1]);if(match[1]&&match[2])end=Math.min(size-1,Number(match[2]));if(!Number.isSafeInteger(start)||!Number.isSafeInteger(end)||start>end||start>=size)throw [416,'Ungültiger Dateibereich.'];headers['Content-Range']=`bytes ${start}-${end}/${size}`;status=206;}headers['Content-Length']=end-start+1;res.writeHead(status,headers);if(req.method==='HEAD')return res.end();const stream=createReadStream(full,{start,end});stream.on('error',()=>res.destroy());res.on('close',()=>stream.destroy());stream.pipe(res);}
+function sendMedia(req,res,m,{directory=mediaDir,cache='private, no-store, max-age=0'}={}){const full=path.join(directory,m.file_name);let size;try{size=statSync(full).size;}catch{throw [410,'Diese Datei ist nicht mehr vorhanden.'];}const headers={'Content-Type':m.mime,'Cache-Control':cache,'Accept-Ranges':'bytes'};const range=req.headers.range;let start=0,end=size-1,status=200;if(range){const match=/^bytes=(\d*)-(\d*)$/.exec(range);if(!match||(!match[1]&&!match[2]))throw [416,'Ungültiger Dateibereich.'];if(!match[1])start=Math.max(0,size-Number(match[2]));else start=Number(match[1]);if(match[1]&&match[2])end=Math.min(size-1,Number(match[2]));if(!Number.isSafeInteger(start)||!Number.isSafeInteger(end)||start>end||start>=size)throw [416,'Ungültiger Dateibereich.'];headers['Content-Range']=`bytes ${start}-${end}/${size}`;status=206;}headers['Content-Length']=end-start+1;res.writeHead(status,headers);if(req.method==='HEAD')return res.end();const stream=createReadStream(full,{start,end});stream.on('error',()=>res.destroy());res.on('close',()=>stream.destroy());stream.pipe(res);}
 const staticFiles={'/':['index.html','text/html; charset=utf-8'],'/app.js':['app.js','text/javascript; charset=utf-8'],'/style.css':['style.css','text/css; charset=utf-8'],'/night.css':['night.css','text/css; charset=utf-8'],'/favicon.svg':['favicon.svg','image/svg+xml']};
 staticFiles['/features.js']=['features.js','text/javascript; charset=utf-8'];
 staticFiles['/features.css']=['features.css','text/css; charset=utf-8'];
@@ -145,6 +146,9 @@ staticFiles['/music-player.js']=['music-player.js','text/javascript; charset=utf
 staticFiles['/dino-client.js']=['dino-client.js','text/javascript; charset=utf-8'];
 staticFiles['/discovery-effects.js']=['discovery-effects.js','text/javascript; charset=utf-8'];
 staticFiles['/action.css']=['action.css','text/css; charset=utf-8'];
+for(const name of ['reset-animation.js','reset-audio.js','reset-live.js','reset-animation.css'])staticFiles['/'+name]=[name,name.endsWith('.css')?'text/css; charset=utf-8':'text/javascript; charset=utf-8'];
+staticFiles['/reset-film.mp4']=['reset-film.mp4','video/mp4'];
+staticFiles['/reset-soundtrack.mp3']=['reset-soundtrack.mp3','audio/mpeg'];
 const server=http.createServer(async(req,res)=>{
   res.setHeader('X-Content-Type-Options','nosniff');
   res.setHeader('Referrer-Policy','same-origin');
@@ -165,6 +169,7 @@ const server=http.createServer(async(req,res)=>{
         return sendMedia(req,res,m);
       }
       const item=staticFiles[url.pathname];if(!item||!['GET','HEAD'].includes(req.method)){res.writeHead(404);return res.end('Nicht gefunden.');}
+      if(['reset-soundtrack.mp3','reset-film.mp4'].includes(item[0]))return sendMedia(req,res,{file_name:item[0],mime:item[1]},{directory:staticRoot,cache:'no-cache'});
       res.writeHead(200,{'Content-Type':item[1],'Cache-Control':'no-cache'});return res.end(req.method==='HEAD'?'':readFileSync(path.join(staticRoot,item[0])));
     }
     const route=url.pathname.slice(5);
@@ -172,7 +177,8 @@ const server=http.createServer(async(req,res)=>{
       if(route==='me')return send(200,{user:safeUser(user)});
       if(route==='feed')return send(200,{posts:feedRows(user?.id||0),members:one('SELECT COUNT(*) AS n FROM users WHERE demo=0').n});
       if(route==='categories')return send(200,{categories:all('SELECT c.*,u.name AS creator_name FROM categories c LEFT JOIN users u ON u.id=c.creator ORDER BY c.name COLLATE NOCASE').map(c=>({...c,photo_price:photoPrice(c)}))});
-      if(route==='event'){const e=one('SELECT * FROM reset_events WHERE ends>? ORDER BY id DESC LIMIT 1',now());return send(200,{event:e||null});}
+      if(route==='event')return send(200,{event:null}); // Old clients must never replay a reset.
+      if(route==='reset-stream')return resetService.stream(req,res);
       if(!user)throw [401,'Melde dich an, um mitzumachen.'];
       if(route==='wallet')return send(200,{...wallet(user.id),entries:all('SELECT description,amount_half/2.0 AS amount,created FROM wallet_entries WHERE user_id=? ORDER BY id DESC LIMIT 50',user.id)});
       if(route==='games')return send(200,games.list(user,idField(Object.fromEntries(url.searchParams),'request')));
@@ -232,7 +238,7 @@ const server=http.createServer(async(req,res)=>{
       try{parsed=parseMultipart(await rawBody(req,route==='upload-extra'?11*1024**2:105*1024**2),contentType);}finally{uploadInProgress=false;}
       const file=parsed.files.find(x=>x.field==='file');if(!file||parsed.files.length!==1)throw [400,'Bitte wähle genau eine Datei aus.'];
       if(parsed.fields.rights!=='true')throw [400,'Bitte bestätige, dass du die Rechte an der Datei hast.'];
-      if(route==='upload-extra'){reserveStorage(file.data.length);return send(201,extras.create(user,parsed.fields,file));}
+      if(route==='upload-extra'){reserveStorage(file.data.length);const result=extras.create(user,parsed.fields,file);checkStorage();return send(201,result);}
       const info=validateMedia(file);
       reserveStorage(file.data.length);
       if(route==='upload-post'){
@@ -249,12 +255,12 @@ const server=http.createServer(async(req,res)=>{
           if(price)ledger(user.id,'upload:'+mediaId,-price,'Foto hochgeladen · '+category.name);
           run('INSERT INTO upload_receipts(user_id,token,post_id,media_id) VALUES(?,?,?,?)',user.id,token,id,mediaId);
           return {id,mediaId,charged:price,user:safeUser(user)};
-        });return send(201,result);}catch(e){if(savedPath){try{unlinkSync(savedPath);}catch{}}throw e;}
+        });checkStorage();return send(201,result);}catch(e){if(savedPath){try{unlinkSync(savedPath);}catch{}}throw e;}
       }
       const rid=Number(parsed.fields.request);const r=one('SELECT * FROM requests WHERE id=?',rid);if(!r||r.status!=='accepted'||![r.sender,r.receiver].includes(user.id)||blocked(r.sender,r.receiver))throw [403,'Dieser Chat ist nicht freigegeben.'];
       if(info.kind!=='image')throw [400,'Im Chat sind nur Bilder erlaubt.'];
       let chatFile;
-      try{const result=transact(()=>{const mediaId=saveMedia(user,file,{requestId:rid,price:0});chatFile=path.join(mediaDir,one('SELECT file_name FROM media WHERE id=?',mediaId).file_name);run('INSERT INTO messages(request_id,sender,body,created,media_id) VALUES(?,?,?,?,?)',rid,user.id,'[Foto:'+mediaId+']',now(),mediaId);return {mediaId};});return send(201,result);}catch(e){if(chatFile){try{unlinkSync(chatFile);}catch{}}throw e;}
+      try{const result=transact(()=>{const mediaId=saveMedia(user,file,{requestId:rid,price:0});chatFile=path.join(mediaDir,one('SELECT file_name FROM media WHERE id=?',mediaId).file_name);run('INSERT INTO messages(request_id,sender,body,created,media_id) VALUES(?,?,?,?,?)',rid,user.id,'[Foto:'+mediaId+']',now(),mediaId);return {mediaId};});checkStorage();return send(201,result);}catch(e){if(chatFile){try{unlinkSync(chatFile);}catch{}}throw e;}
     }
     if(!contentType.startsWith('application/json'))throw [403,'Ungültige Anfrage. Bitte lade die Seite neu.'];
     // A custom request header and JSON enforce a same-origin browser request; CORS is never enabled.
