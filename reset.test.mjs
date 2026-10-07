@@ -159,3 +159,10 @@ test('Only Lima main admin receives close control, including late joiners',async
  assert.match(source,/hidden=!canClose/);assert.match(source,/e.preventDefault\(\);if\(canClose\)close\(\)/);
  assert.match(source,/stage.requestFullscreen/);assert.match(source,/orientation.lock\('landscape'\)/);
 });
+
+test('PWA assets are served with correct MIME and service worker is not stale-cached',async t=>{
+ const h=await app(t);
+ for(const [file,mime] of [['manifest.webmanifest','application/manifest+json'],['sw.js','text/javascript'],['app-icon-512.png','image/png'],['offline.html','text/html'],['pwa.css','text/css']]){
+  const response=await fetch(h.base+'/'+file);assert.equal(response.status,200,file);assert.ok(response.headers.get('content-type').startsWith(mime),file);assert.equal(response.headers.get('cache-control'),'no-cache');
+ }
+});

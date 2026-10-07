@@ -17,7 +17,7 @@ const root = path.dirname(fileURLToPath(import.meta.url));
 const staticCandidates = [path.join(root, 'public'), root];
 // A complete new client takes priority over an old copy in the other layout.
 const staticRoot = staticCandidates.filter(directory => {
-  return ['index.html','music-player.js','dino-client.js','discovery-effects.js','reset-animation.js','reset-audio.js','reset-soundtrack.mp3','reset-film.mp4','reset-live.js','reset-animation.css','action.css','features.js','app.js'].every(file=>existsSync(path.join(directory,file)));
+  return ['index.html','music-player.js','dino-client.js','discovery-effects.js','reset-animation.js','reset-audio.js','reset-soundtrack.mp3','reset-film.mp4','manifest.webmanifest','sw.js','pwa.js','pwa.css','reset-live.js','reset-animation.css','action.css','features.js','app.js'].every(file=>existsSync(path.join(directory,file)));
 }).sort((a,b)=>{
   const version=directory=>Number(readFileSync(path.join(directory,'index.html'),'utf8').match(/name="f-release" content="([0-9.]+)"/)?.[1]||0);
   return version(b)-version(a);
@@ -148,6 +148,7 @@ staticFiles['/dino-client.js']=['dino-client.js','text/javascript; charset=utf-8
 staticFiles['/discovery-effects.js']=['discovery-effects.js','text/javascript; charset=utf-8'];
 staticFiles['/action.css']=['action.css','text/css; charset=utf-8'];
 for(const name of ['reset-animation.js','reset-audio.js','reset-live.js','reset-animation.css'])staticFiles['/'+name]=[name,name.endsWith('.css')?'text/css; charset=utf-8':'text/javascript; charset=utf-8'];
+for(const [name,mime] of [['manifest.webmanifest','application/manifest+json'],['sw.js','text/javascript; charset=utf-8'],['pwa.js','text/javascript; charset=utf-8'],['pwa.css','text/css; charset=utf-8'],['offline.html','text/html; charset=utf-8'],...['app-icon-192.png','app-icon-512.png','app-icon-maskable.png','apple-touch-icon.png'].map(name=>[name,'image/png'])])staticFiles['/'+name]=[name,mime];
 staticFiles['/reset-film.mp4']=['reset-film.mp4','video/mp4'];
 staticFiles['/reset-soundtrack.mp3']=['reset-soundtrack.mp3','audio/mpeg'];
 const server=http.createServer(async(req,res)=>{

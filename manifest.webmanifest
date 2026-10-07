@@ -1,0 +1,11 @@
+{
+ "id":"/", "name":"Feindschaft – Aber mit Blumen", "short_name":"Feindschaft",
+ "description":"Kontern, kennenlernen, Musik teilen und gemeinsam spielen.",
+ "lang":"de", "start_url":"/", "scope":"/", "display":"standalone",
+ "background_color":"#17151e", "theme_color":"#22242a", "orientation":"any",
+ "icons":[
+  {"src":"/app-icon-192.png","sizes":"192x192","type":"image/png","purpose":"any"},
+  {"src":"/app-icon-512.png","sizes":"512x512","type":"image/png","purpose":"any"},
+  {"src":"/app-icon-maskable.png","sizes":"512x512","type":"image/png","purpose":"maskable"}
+ ]
+}
