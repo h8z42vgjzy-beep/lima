@@ -17,7 +17,7 @@ const root = path.dirname(fileURLToPath(import.meta.url));
 const staticCandidates = [path.join(root, 'public'), root];
 // A complete new client takes priority over an old copy in the other layout.
 const staticRoot = staticCandidates.filter(directory => {
-  return ['index.html','music-player.js','dino-client.js','discovery-effects.js','reset-animation.js','reset-audio.js','reset-soundtrack.mp3','reset-film.mp4','manifest.webmanifest','sw.js','pwa.js','pwa.css','reset-live.js','reset-animation.css','action.css','features.js','app.js'].every(file=>existsSync(path.join(directory,file)));
+  return ['index.html','music-player.js','dino-client.js','discovery-effects.js','reset-animation.js','reset-audio.js','reset-soundtrack.mp3','reset-film.mp4','manifest.webmanifest','sw.js','pwa.js','pwa.css','moderation-notices.js','moderation-notices.css','reset-live.js','reset-animation.css','action.css','features.js','app.js'].every(file=>existsSync(path.join(directory,file)));
 }).sort((a,b)=>{
   const version=directory=>Number(readFileSync(path.join(directory,'index.html'),'utf8').match(/name="f-release" content="([0-9.]+)"/)?.[1]||0);
   return version(b)-version(a);
@@ -68,6 +68,8 @@ CREATE TABLE IF NOT EXISTS upload_receipts(user_id INTEGER NOT NULL REFERENCES u
 CREATE TABLE IF NOT EXISTS photo_views(media_id INTEGER NOT NULL REFERENCES media(id) ON DELETE CASCADE, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, token TEXT NOT NULL, expires INTEGER NOT NULL, PRIMARY KEY(media_id,user_id));
 CREATE TABLE IF NOT EXISTS documents(id INTEGER PRIMARY KEY, post_id INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE, file_name TEXT NOT NULL UNIQUE, original_name TEXT NOT NULL, mime TEXT NOT NULL, bytes INTEGER NOT NULL);`);
 // Only link genuine legacy photo messages owned by their sender in that chat.
+if(!all('PRAGMA table_info(messages)').some(c=>c.name==='deleted'))db.exec('ALTER TABLE messages ADD COLUMN deleted INTEGER NOT NULL DEFAULT 0');
+db.exec(`CREATE TABLE IF NOT EXISTS moderation_notices(id INTEGER PRIMARY KEY,user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,report_id INTEGER NOT NULL UNIQUE,action TEXT NOT NULL,body TEXT NOT NULL,fine_percent REAL NOT NULL DEFAULT 0,fine_amount REAL NOT NULL DEFAULT 0,created INTEGER NOT NULL,read_at INTEGER);`);
 db.exec(`UPDATE messages SET media_id=(SELECT m.id FROM media m WHERE m.request_id=messages.request_id AND m.owner_id=messages.sender AND messages.body='[Foto:'||m.id||']') WHERE media_id IS NULL AND body LIKE '[Foto:%]';`);
 const starterCategories=[['Alltag',5],['Schule & Uni',5],['Internet',8],['Beziehungen',10],['Sport',8],['Eiskunstlauf & Sport',8],['Politik & Diskussion',10],['Wissenschaften',8],['Gaming',8],['Musik',8],['Filme & Serien',8],['Bücher',5],['Technik',8],['Mode & Style',8],['Essen',5],['Reisen',8],['Tiere',5],['Memes',5],['Meinungen',5],['Fragen',0],['Kunst & Kreativität',8]];
 for(const [name,price] of starterCategories)run('INSERT OR IGNORE INTO categories(name,photo_price,created) VALUES(?,?,?)',name,price,Date.now());
@@ -148,7 +150,7 @@ staticFiles['/dino-client.js']=['dino-client.js','text/javascript; charset=utf-8
 staticFiles['/discovery-effects.js']=['discovery-effects.js','text/javascript; charset=utf-8'];
 staticFiles['/action.css']=['action.css','text/css; charset=utf-8'];
 for(const name of ['reset-animation.js','reset-audio.js','reset-live.js','reset-animation.css'])staticFiles['/'+name]=[name,name.endsWith('.css')?'text/css; charset=utf-8':'text/javascript; charset=utf-8'];
-for(const [name,mime] of [['manifest.webmanifest','application/manifest+json'],['sw.js','text/javascript; charset=utf-8'],['pwa.js','text/javascript; charset=utf-8'],['pwa.css','text/css; charset=utf-8'],['offline.html','text/html; charset=utf-8'],...['app-icon-192.png','app-icon-512.png','app-icon-maskable.png','apple-touch-icon.png'].map(name=>[name,'image/png'])])staticFiles['/'+name]=[name,mime];
+for(const [name,mime] of [['manifest.webmanifest','application/manifest+json'],['sw.js','text/javascript; charset=utf-8'],['pwa.js','text/javascript; charset=utf-8'],['pwa.css','text/css; charset=utf-8'],['moderation-notices.js','text/javascript; charset=utf-8'],['moderation-notices.css','text/css; charset=utf-8'],['offline.html','text/html; charset=utf-8'],...['app-icon-192.png','app-icon-512.png','app-icon-maskable.png','apple-touch-icon.png'].map(name=>[name,'image/png'])])staticFiles['/'+name]=[name,mime];
 staticFiles['/reset-film.mp4']=['reset-film.mp4','video/mp4'];
 staticFiles['/reset-soundtrack.mp3']=['reset-soundtrack.mp3','audio/mpeg'];
 const server=http.createServer(async(req,res)=>{
@@ -182,6 +184,7 @@ const server=http.createServer(async(req,res)=>{
       if(route==='event')return send(200,{event:null}); // Old clients must never replay a reset.
       if(route==='reset-stream')return resetService.stream(req,res,user);
       if(!user)throw [401,'Melde dich an, um mitzumachen.'];
+      if(route==='moderation/notices')return send(200,{notices:all('SELECT id,action,body,fine_percent,fine_amount,created,read_at FROM moderation_notices WHERE user_id=? ORDER BY id DESC LIMIT 100',user.id)});
       if(route==='wallet')return send(200,{...wallet(user.id),entries:all('SELECT description,amount_half/2.0 AS amount,created FROM wallet_entries WHERE user_id=? ORDER BY id DESC LIMIT 50',user.id)});
       if(route==='games')return send(200,games.list(user,idField(Object.fromEntries(url.searchParams),'request')));
       if(route==='dino-stream'){
@@ -216,7 +219,7 @@ const server=http.createServer(async(req,res)=>{
       if(route==='messages'){
         const rid=idField(Object.fromEntries(url.searchParams),'request');const r=one('SELECT * FROM requests WHERE id=?',rid);
         if(!r||r.status!=='accepted'||![r.sender,r.receiver].includes(user.id)||blocked(r.sender,r.receiver))throw [403,'Dieser Chat ist nicht freigegeben.'];
-        return send(200,{messages:all('SELECT id,sender,body,created,media_id FROM (SELECT * FROM messages WHERE request_id=? ORDER BY id DESC LIMIT 500) ORDER BY id',rid).map(m=>{const photo=m.media_id?one('SELECT * FROM media WHERE id=?',m.media_id):null;return {...m,mediaId:m.media_id,photoState:!m.media_id?null:!photo||photo.removed||photo.expires<=now()||photo.created+7*DAY<=now()?'expired':photo.owner_id===user.id?'own':photo.opened_at?'opened':'ready'};})});
+        return send(200,{messages:all('SELECT id,sender,body,created,media_id FROM (SELECT * FROM messages WHERE request_id=? AND deleted=0 ORDER BY id DESC LIMIT 500) ORDER BY id',rid).map(m=>{const photo=m.media_id?one('SELECT * FROM media WHERE id=?',m.media_id):null;return {...m,mediaId:m.media_id,photoState:!m.media_id?null:!photo||photo.removed||photo.expires<=now()||photo.created+7*DAY<=now()?'expired':photo.owner_id===user.id?'own':photo.opened_at?'opened':'ready'};})});
       }
       if(route==='member'){
         const target=idField(Object.fromEntries(url.searchParams),'id');const other=one('SELECT * FROM users WHERE id=?',target);
@@ -228,7 +231,7 @@ const server=http.createServer(async(req,res)=>{
     }
     if(req.method!=='POST')throw [405,'Nicht unterstützt.'];
     if(req.headers['x-f-request']!=='1')throw [403,'Ungültige Anfrage. Bitte lade die Seite neu.'];
-    if(user){requireActive(user);}
+    if(user&&route!=='moderation/read'){requireActive(user);}
     if(route==='admin/reset-preview'){
       if(!user?.is_admin)throw [403,'Nur für die Moderation.'];
       rate('reset-preview:'+user.id,6);req.resume();
@@ -345,8 +348,47 @@ const server=http.createServer(async(req,res)=>{
       if(b.targetType==='message'){const m=one('SELECT * FROM messages WHERE id=?',target),q=m?one('SELECT * FROM requests WHERE id=?',m.request_id):null;if(!q||![q.sender,q.receiver].includes(user.id))throw [403,'Du kannst keine fremden Chatnachrichten melden.'];}
       const existing=one('SELECT id FROM reports WHERE reporter=? AND target_type=? AND target_id=? AND created>?',user.id,b.targetType,target,now()-7*DAY);if(existing)throw [409,'Diesen Inhalt hast du diese Woche bereits gemeldet.'];const reason=typeof b.reason==='string'?b.reason.trim().slice(0,600):'';const created=run('INSERT INTO reports(reporter,target_type,target_id,reason,created) VALUES(?,?,?,?,?)',user.id,b.targetType,target,reason,now());return send(201,{ok:true,id:Number(created.lastInsertRowid)});
     }
+    if(route==='moderation/read'){
+      if(!user)throw [401,'Bitte melde dich an.'];
+      run('UPDATE moderation_notices SET read_at=? WHERE id=? AND user_id=?',now(),idField(b,'id'),user.id);
+      return send(200,{ok:true});
+    }
     if(route==='admin/action'){
-      if(!user.is_admin)throw [403,'Nur für die Moderation.'];const report=idField(b,'report');const r=one('SELECT * FROM reports WHERE id=? AND status=\'open\'',report);if(!r)throw [404,'Meldung nicht gefunden.'];const action=String(b.action||'');const note=typeof b.note==='string'?b.note.trim().slice(0,600):'';if(!['keep','delete','warn','suspend','ban'].includes(action))throw [400,'Ungültige Moderationsaktion.'];const fine=Math.max(0,Math.min(100,Number(b.fine)||0));let targetUser=null;if(r.target_type==='user')targetUser=r.target_id;else if(r.target_type==='post'||r.target_type==='comment'){targetUser=one(`SELECT user_id FROM ${r.target_type==='post'?'posts':'comments'} WHERE id=?`,r.target_id)?.user_id;}else if(r.target_type==='media')targetUser=one('SELECT owner_id FROM media WHERE id=?',r.target_id)?.owner_id;else if(r.target_type==='message')targetUser=one('SELECT sender FROM messages WHERE id=?',r.target_id)?.sender;if(action==='delete'){if(r.target_type==='post')run('UPDATE posts SET deleted=1 WHERE id=?',r.target_id);if(r.target_type==='media'){const m=one('SELECT * FROM media WHERE id=?',r.target_id);if(m)removeMedia(m);}}if(targetUser&&fine){const balance=wallet(targetUser).balance;run('INSERT INTO daily_claims(user_id,day,amount,created) VALUES(?,?,?,?)',targetUser,'moderation:'+report,-Math.round(Math.max(0,balance)*fine/100*2)/2,now());}if(targetUser&&action==='suspend')run('UPDATE users SET suspended_until=? WHERE id=?',Number(b.until)||now()+DAY,targetUser);if(targetUser&&action==='ban')run('UPDATE users SET suspended_until=? WHERE id=?',now()+3650*DAY,targetUser);run('UPDATE reports SET status=?,reviewed=?,reviewer=?,action_note=? WHERE id=?',action==='keep'?'kept':'closed',now(),user.id,note,report);return send(200,{ok:true});
+      if(!user.is_admin)throw [403,'Nur für die Moderation.'];
+      const report=idField(b,'report'),r=one("SELECT * FROM reports WHERE id=? AND status='open'",report);
+      if(!r)throw [404,'Meldung nicht gefunden.'];
+      const action=String(b.action||''),note=typeof b.note==='string'?b.note.trim().slice(0,600):'';
+      if(!['keep','delete','warn','suspend','ban'].includes(action))throw [400,'Ungültige Moderationsaktion.'];
+      if(action==='delete'&&r.target_type==='user')throw [400,'Wähle zum Löschen bitte einen konkreten Beitrag, ein Foto oder eine Nachricht.'];
+      const fine=Math.max(0,Math.min(100,Number(b.fine)||0));
+      let targetUser=null;
+      if(r.target_type==='user')targetUser=r.target_id;
+      else if(r.target_type==='post'||r.target_type==='comment')targetUser=one(`SELECT user_id FROM ${r.target_type==='post'?'posts':'comments'} WHERE id=?`,r.target_id)?.user_id;
+      else if(r.target_type==='media')targetUser=one('SELECT owner_id FROM media WHERE id=?',r.target_id)?.owner_id;
+      else if(r.target_type==='message')targetUser=one('SELECT sender FROM messages WHERE id=?',r.target_id)?.sender;
+      let amount=0;
+      transact(()=>{
+        if(action==='delete'){
+          const deleteFile=m=>{if(!m)return;removeMedia(m);run("UPDATE messages SET deleted=1,body='' WHERE media_id=?",m.id);run('DELETE FROM photo_views WHERE media_id=?',m.id);};
+          if(r.target_type==='post'){run('UPDATE posts SET deleted=1 WHERE id=?',r.target_id);for(const m of all('SELECT * FROM media WHERE post_id=? AND removed=0',r.target_id))deleteFile(m);}
+          if(r.target_type==='comment')run('DELETE FROM comments WHERE id=?',r.target_id);
+          if(r.target_type==='media')deleteFile(one('SELECT * FROM media WHERE id=?',r.target_id));
+          if(r.target_type==='message'){
+            const message=one('SELECT * FROM messages WHERE id=?',r.target_id);
+            if(message?.media_id)deleteFile(one('SELECT * FROM media WHERE id=?',message.media_id));
+            run("UPDATE messages SET deleted=1,body='' WHERE id=?",r.target_id);
+          }
+        }
+        if(targetUser&&fine){amount=Math.round(Math.max(0,wallet(targetUser).balance)*fine/100*2)/2;run('INSERT INTO daily_claims(user_id,day,amount,created) VALUES(?,?,?,?)',targetUser,'moderation:'+report,-amount,now());}
+        if(targetUser&&action==='suspend')run('UPDATE users SET suspended_until=? WHERE id=?',Number(b.until)||now()+DAY,targetUser);
+        if(targetUser&&action==='ban')run('UPDATE users SET suspended_until=? WHERE id=?',now()+3650*DAY,targetUser);
+        if(targetUser&&(action!=='keep'||fine)){
+          const defaults={warn:'Du hast eine Warnung von der Moderation erhalten.',delete:'Ein von dir veröffentlichter Inhalt wurde von der Moderation gelöscht.',suspend:'Dein Konto wurde vorübergehend gesperrt.',ban:'Dein Konto wurde gesperrt.',keep:'Die Moderation hat über eine Meldung entschieden.'};
+          run('INSERT INTO moderation_notices(user_id,report_id,action,body,fine_percent,fine_amount,created) VALUES(?,?,?,?,?,?,?)',targetUser,report,action,note||defaults[action],fine,amount,now());
+        }
+        run('UPDATE reports SET status=?,reviewed=?,reviewer=?,action_note=? WHERE id=?',action==='keep'?'kept':'closed',now(),user.id,note,report);
+      });
+      return send(200,{ok:true});
     }
     if(route==='react'){
       if(!['post','comment'].includes(b.kind)||![0,1,-1].includes(b.value))throw [400,'Ungültige Bewertung.'];

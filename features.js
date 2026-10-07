@@ -109,6 +109,7 @@ function closePhotoViewer() { const dialog = $('#photo-viewer'); if (dialog?.ope
 async function displayPhoto(url, expiresIn = null) {
   const dialog = photoDialog(), generation = ++photoGeneration;
   const deadline = expiresIn === null ? null : Date.now() + expiresIn;
+  dialog.dataset.mediaId=/\/media\/(\d+)/.exec(url)?.[1]||'';dialog.dataset.chat=String(modalView==='chat');
   dialog.dataset.once = String(deadline !== null);
   dialog.innerHTML = `<button class="modal-close" data-action="close-photo" aria-label="Foto schließen">×</button><h2 id="photo-title">${deadline ? 'Einmal-Foto' : 'Foto ansehen'}</h2><p id="photo-time" role="status">Foto wird geladen …</p><div id="photo-content"></div><p class="form-hint">${deadline ? 'Nach dem Schließen oder Ablauf nicht erneut zu öffnen. Screenshots und externe Kopien können technisch nicht verhindert werden.' : 'Bereits freigeschaltet. Erneutes Ansehen ist kostenlos.'}</p>`;
   if (!dialog.open) dialog.showModal();
@@ -166,6 +167,7 @@ async function loadChatMessages() {
   if (!chatId || modalView !== 'chat') return;
   const id = chatId, data = await api('messages?request=' + id);
   if (id !== chatId || modalView !== 'chat') return;
+  const viewer=$('#photo-viewer');if(viewer?.open&&viewer.dataset.chat==='true'&&viewer.dataset.mediaId&&!data.messages.some(m=>String(m.mediaId)===viewer.dataset.mediaId))closePhotoViewer();
   const box = $('#messages'), old = box.dataset.signature, signature = JSON.stringify(data.messages);
   if (old === signature) return;
   const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 60;

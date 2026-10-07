@@ -2,12 +2,12 @@
 <html lang="de">
 <head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="f-release" content="8.0">
+  <meta name="f-release" content="8.1">
   <meta name="theme-color" content="#22242a"><meta name="robots" content="noindex,nofollow">
   <meta name="description" content="F steht für Feindschaft. Teile freche Sprüche, verteile Blumen und finde Menschen mit deinem Humor.">
   <link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/apple-touch-icon.png">
   <meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Feindschaft">
-  <link rel="stylesheet" href="/pwa.css">
+  <link rel="stylesheet" href="/pwa.css"><link rel="stylesheet" href="/moderation-notices.css">
   <title>F — Feindschaft. Aber mit Blumen.</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="/night.css">
   <link rel="stylesheet" href="/reset-animation.css"><link rel="stylesheet" href="/features.css"><link rel="stylesheet" href="/action.css">
@@ -54,7 +54,7 @@
         <div class="chat-teaser"><span class="chat-icon">↔</span><div><h4>Gleicher Humor?</h4><p>Ein guter Konter ist auch ein Anfang.</p></div><button data-action="chats" aria-label="Chats öffnen">↗</button></div>
       </aside></div>
     </section>
-    <footer><a class="footer-logo" href="#">f<span>✳</span></a><p>Schlechte Laune. Gute Gesellschaft.<span>Eine Idee von Lima.</span></p><div><button type="button" id="install-app">Als App installieren ↗</button><button data-action="rules">Spielregeln</button><button data-action="privacy">Datenschutz &amp; Testbetrieb</button><span>Mit Blumen, natürlich. ✳</span></div></footer>
+    <footer><a class="footer-logo" href="#">f<span>✳</span></a><p>Schlechte Laune. Gute Gesellschaft.<span>Eine Idee von Lima.</span></p><div><button type="button" id="moderation-notices" hidden>Moderationshinweise</button><button type="button" id="install-app">Als App installieren ↗</button><button data-action="rules">Spielregeln</button><button data-action="privacy">Datenschutz &amp; Testbetrieb</button><span>Mit Blumen, natürlich. ✳</span></div></footer>
   </main>
   <dialog id="modal" aria-labelledby="modal-title"><button class="modal-close" data-action="close" aria-label="Schließen">×</button><div id="modal-content"></div></dialog>
   <div id="toast" role="status" aria-live="polite"></div>
@@ -68,5 +68,5 @@
   <script src="/music-player.js" defer></script><script src="/dino-client.js" defer></script><script src="/discovery-effects.js" defer></script>
   <script src="/reset-audio.js" defer></script><script src="/reset-animation.js" defer></script><script src="/reset-live.js" defer></script>
   <script src="/features.js" defer></script><script src="/app.js" defer></script>
-<script src="/pwa.js" defer></script>
+<script src="/pwa.js" defer></script><script src="/moderation-notices.js" defer></script>
 </body></html>

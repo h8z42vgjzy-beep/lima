@@ -15,6 +15,7 @@ modal.addEventListener('click',e=>{if(e.target===modal){const r=modal.getBoundin
 function requireUser(intent){if(user)return true;pendingIntent=intent||null;auth('register');return false;}
 function time(t){const mins=Math.max(0,Math.floor((Date.now()-t)/60000));if(mins<1)return 'gerade eben';if(mins<60)return `vor ${mins} Min.`;if(mins<1440)return `vor ${Math.floor(mins/60)} Std.`;return new Date(t).toLocaleDateString('de-DE',{day:'numeric',month:'short'});}
 function updateUser(){
+ globalThis.refreshModerationNotices?.();
   $('#account-nav').innerHTML=user?`<button class="inbox-button" data-action="chats" aria-label="Chat-Anfragen und Nachrichten">${icon('mail')}<span id="inbox-count"></span></button>${user.isAdmin?'<button class="mini-button" data-action="admin">Moderation</button>':''}<button class="account-button" data-action="profile">${avatar(user)}<span class="account-name">${esc(user.name)}</span>${user.plus?'<span class="plus-tag">PLUS</span>':''}</button>`:'<button class="login-link" data-action="login">Anmelden</button><button class="button dark small" data-action="register">Dabei sein <span>↗</span></button>';
   updateWallet();
   const cta=$('#hero-cta');cta.dataset.action=user?'compose':'register';cta.innerHTML=user?'Dein nächster Konter <span>↗</span>':'Misch dich ein <span>↗</span>';

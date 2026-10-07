@@ -24,7 +24,7 @@ async function app(t){
  function post(uid=owner.id,space='feed'){return Number(run('INSERT INTO posts(user_id,body,category,created,expires,space) VALUES(?,?,?,?,?,?)',uid,'Nur Testdaten','Alltag',Date.now(),space==='feed'?Date.now()+86400000:null,space).lastInsertRowid);}
  function media(bytes,{uid=owner.id,pid=post(uid),rid=null,kind='image'}={}){const name=randomUUID()+'.bin';writeFileSync(path.join(dir,'media',name),Buffer.alloc(bytes,7));const id=Number(run('INSERT INTO media(owner_id,post_id,request_id,file_name,original_name,mime,kind,bytes,created,expires) VALUES(?,?,?,?,?,?,?,?,?,?)',uid,pid,rid,name,'fixture','application/octet-stream',kind,bytes,Date.now(),Date.now()+28*86400000).lastInsertRowid);return {id,pid,file:path.join(dir,'media',name)};}
  function report(type,id){return Number(run('INSERT INTO reports(reporter,target_type,target_id,reason,created) VALUES(?,?,?,?,?)',reporter.id,type,id,'Testmeldung',Date.now()).lastInsertRowid);}
- async function call(route,actor=owner,data){const res=await fetch(base+'/api/'+route,{method:data?'POST':'GET',headers:{Cookie:actor.cookie,...data?{'X-F-Request':'1'}:{}},body:data});return {status:res.status,data:await res.json()};}
+ async function call(route,actor=owner,data){const res=await fetch(base+'/api/'+route,{method:data?'POST':'GET',headers:{Cookie:actor.cookie,...data?{'X-F-Request':'1',...(typeof data==='string'?{'Content-Type':'application/json'}:{})}:{}},body:data});return {status:res.status,data:await res.json()};}
  async function upload(bytes=100){const b=Buffer.alloc(bytes);b.write('RIFF');b.writeUInt32LE(bytes-8,4);b.write('WAVEfmt ',8);b.writeUInt32LE(16,16);b.writeUInt16LE(1,20);b.writeUInt16LE(1,22);b.writeUInt32LE(8000,24);b.writeUInt32LE(16000,28);b.writeUInt16LE(2,32);b.writeUInt16LE(16,34);b.write('data',36);b.writeUInt32LE(bytes-44,40);const f=new FormData();for(const [k,v]of Object.entries({body:'Ein Testklang.',category:one('SELECT id FROM categories LIMIT 1').id,rights:'true',expectedPrice:0,uploadToken:randomUUID()}))f.set(k,String(v));f.set('file',new Blob([b],{type:'audio/wav'}),'test.wav');return call('upload-post',owner,f);}
  async function stream(actor){const abort=new AbortController();controllers.push(abort);const response=await fetch(base+'/api/reset-stream',{signal:abort.signal,headers:actor?{Cookie:actor.cookie}:{}});assert.equal(response.status,200);const reader=response.body.getReader(),events=[];let buffer='';const waiters=[];
  const task=(async()=>{try{while(true){const r=await reader.read();if(r.done)break;buffer+=new TextDecoder().decode(r.value);let at;while((at=buffer.indexOf('\n\n'))>=0){const chunk=buffer.slice(0,at);buffer=buffer.slice(at+2);const name=/event: (.+)/.exec(chunk)?.[1],data=/data: (.+)/.exec(chunk)?.[1];if(name&&data){events.push({name,data:JSON.parse(data)});for(const f of waiters)f();}}}}catch(e){if(!abort.signal.aborted)throw e;}})();
@@ -165,4 +165,44 @@ test('PWA assets are served with correct MIME and service worker is not stale-ca
  for(const [file,mime] of [['manifest.webmanifest','application/manifest+json'],['sw.js','text/javascript'],['app-icon-512.png','image/png'],['offline.html','text/html'],['pwa.css','text/css']]){
   const response=await fetch(h.base+'/'+file);assert.equal(response.status,200,file);assert.ok(response.headers.get('content-type').startsWith(mime),file);assert.equal(response.headers.get('cache-control'),'no-cache');
  }
+});
+
+test('Deleting reported chat text or photo removes it for both participants and revokes the file',async t=>{
+ const h=await app(t),rid=Number(h.run("INSERT INTO requests(sender,receiver,status,created) VALUES(?,?,'accepted',?)",h.owner.id,h.reporter.id,Date.now()).lastInsertRowid);
+ const picture=h.media(200,{pid:null,rid}),message=Number(h.run('INSERT INTO messages(request_id,sender,body,media_id,created) VALUES(?,?,?,?,?)',rid,h.owner.id,'[Foto:'+picture.id+']',picture.id,Date.now()).lastInsertRowid);
+ const preserved=Number(h.run('INSERT INTO messages(request_id,sender,body,created) VALUES(?,?,?,?)',rid,h.reporter.id,'Behalten',Date.now()).lastInsertRowid);
+ const report=h.report('message',message);
+ assert.equal((await h.call('admin/action',h.owner,JSON.stringify({report,action:'delete'}))).status,403);
+ assert.equal((await h.call('admin/action',h.admin,JSON.stringify({report,action:'delete'}))).status,200);
+ for(const actor of [h.owner,h.reporter])assert.deepEqual((await h.call('messages?request='+rid,actor)).data.messages.map(m=>m.id),[preserved]);
+ assert.equal(existsSync(picture.file),false);assert.equal(h.one('SELECT removed FROM media WHERE id=?',picture.id).removed,1);
+ assert.equal((await fetch(h.base+'/media/'+picture.id,{headers:{Cookie:h.owner.cookie}})).status,410);
+ const text=Number(h.run('INSERT INTO messages(request_id,sender,body,created) VALUES(?,?,?,?)',rid,h.owner.id,'Löschen',Date.now()).lastInsertRowid);
+ const textReport=h.report('message',text);await h.call('admin/action',h.admin,JSON.stringify({report:textReport,action:'delete'}));
+ assert.deepEqual((await h.call('messages?request='+rid)).data.messages.map(m=>m.id),[preserved]);
+});
+
+test('Deleting a media report also hides its chat message',async t=>{
+ const h=await app(t),rid=Number(h.run("INSERT INTO requests(sender,receiver,status,created) VALUES(?,?,'accepted',?)",h.owner.id,h.reporter.id,Date.now()).lastInsertRowid),picture=h.media(200,{pid:null,rid});
+ h.run('INSERT INTO messages(request_id,sender,body,media_id,created) VALUES(?,?,?,?,?)',rid,h.owner.id,'[Foto:'+picture.id+']',picture.id,Date.now());
+ const report=h.report('media',picture.id);await h.call('admin/action',h.admin,JSON.stringify({report,action:'delete'}));
+ assert.equal((await h.call('messages?request='+rid)).data.messages.length,0);assert.equal(existsSync(picture.file),false);
+});
+
+test('Warnings persist only for their recipient and cannot be acknowledged by others',async t=>{
+ const h=await app(t);h.run('INSERT INTO daily_claims(user_id,day,amount,created) VALUES(?,?,?,?)',h.owner.id,'fixture',100,Date.now());
+ const report=h.report('user',h.owner.id),note='Bitte beachte die Chatregeln.';
+ assert.equal((await h.call('admin/action',h.admin,JSON.stringify({report,action:'warn',note,fine:25}))).status,200);
+ const notices=(await h.call('moderation/notices')).data.notices;assert.equal(notices.length,1);assert.equal(notices[0].body,note);assert.equal(notices[0].fine_amount,25);assert.equal(notices[0].read_at,null);
+ assert.equal((await h.call('moderation/notices',h.reporter)).data.notices.length,0);
+ await h.call('moderation/read',h.reporter,JSON.stringify({id:notices[0].id}));assert.equal(h.one('SELECT read_at FROM moderation_notices WHERE id=?',notices[0].id).read_at,null);
+ await h.call('moderation/read',h.owner,JSON.stringify({id:notices[0].id}));assert.ok((await h.call('moderation/notices')).data.notices[0].read_at);
+ assert.equal((await h.call('admin/action',h.admin,JSON.stringify({report,action:'warn'}))).status,404);assert.equal(h.one('SELECT COUNT(*) AS n FROM moderation_notices').n,1);
+});
+
+test('Deleting a reported comment removes its replies without deleting the post',async t=>{
+ const h=await app(t),pid=h.post(),comment=Number(h.run('INSERT INTO comments(user_id,post_id,body,created) VALUES(?,?,?,?)',h.owner.id,pid,'Gemeldeter Kommentar',Date.now()).lastInsertRowid);
+ h.run('INSERT INTO comments(user_id,post_id,body,created,parent_id) VALUES(?,?,?,?,?)',h.reporter.id,pid,'Antwort',Date.now(),comment);
+ const report=h.report('comment',comment);assert.equal((await h.call('admin/action',h.admin,JSON.stringify({report,action:'delete'}))).status,200);
+ assert.equal((await h.call('comments?post='+pid)).data.comments.length,0);assert.equal(h.one('SELECT deleted FROM posts WHERE id=?',pid).deleted,0);
 });
