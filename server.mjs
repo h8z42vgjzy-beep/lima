@@ -62,6 +62,7 @@ CREATE TABLE IF NOT EXISTS unlocks(user_id INTEGER REFERENCES users(id) ON DELET
 CREATE TABLE IF NOT EXISTS reports(id INTEGER PRIMARY KEY, reporter INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, target_type TEXT NOT NULL CHECK(target_type IN('user','post','comment','media','message')), target_id INTEGER NOT NULL, reason TEXT NOT NULL DEFAULT '', created INTEGER NOT NULL, status TEXT NOT NULL DEFAULT 'open', reviewed INTEGER, reviewer INTEGER REFERENCES users(id), action_note TEXT NOT NULL DEFAULT '');
 CREATE TABLE IF NOT EXISTS reset_events(id INTEGER PRIMARY KEY, created INTEGER NOT NULL, ends INTEGER NOT NULL);
 CREATE INDEX IF NOT EXISTS media_expiry ON media(expires); CREATE INDEX IF NOT EXISTS report_target ON reports(target_type,target_id,status);`);
+if(!all('PRAGMA table_info(reset_events)').some(c=>c.name==='preview'))db.exec('ALTER TABLE reset_events ADD COLUMN preview INTEGER NOT NULL DEFAULT 0');
 db.exec(`CREATE TABLE IF NOT EXISTS wallet_entries(id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, operation TEXT NOT NULL UNIQUE, amount_half INTEGER NOT NULL, description TEXT NOT NULL, created INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS upload_receipts(user_id INTEGER NOT NULL REFERENCES users(id), token TEXT NOT NULL, post_id INTEGER, media_id INTEGER, PRIMARY KEY(user_id,token));
 CREATE TABLE IF NOT EXISTS photo_views(media_id INTEGER NOT NULL REFERENCES media(id) ON DELETE CASCADE, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, token TEXT NOT NULL, expires INTEGER NOT NULL, PRIMARY KEY(media_id,user_id));
@@ -227,6 +228,11 @@ const server=http.createServer(async(req,res)=>{
     if(req.method!=='POST')throw [405,'Nicht unterstützt.'];
     if(req.headers['x-f-request']!=='1')throw [403,'Ungültige Anfrage. Bitte lade die Seite neu.'];
     if(user){requireActive(user);}
+    if(route==='admin/reset-preview'){
+      if(!user?.is_admin)throw [403,'Nur für die Moderation.'];
+      rate('reset-preview:'+user.id,6);req.resume();
+      return send(200,{event:resetService.preview()});
+    }
     const contentType=req.headers['content-type']||'';
     if(contentType.startsWith('multipart/form-data')){
       if(!user)throw [401,'Melde dich an, um Dateien hochzuladen.'];

@@ -73,7 +73,7 @@ test('84.9% stays intact; exactly 85% clears test media/feed, preserves all repo
  assert.equal(one("SELECT COUNT(*) AS n FROM messages WHERE body='Dauerhafter Testtext'").n,1);
  assert.equal((await h.call('feed')).data.posts.some(p=>p.id===picture.pid),false);
  assert.equal((await h.call('event')).data.event,null);
- const late=await h.stream();await h.call('feed');assert.deepEqual(late.events.map(e=>e.name),['ready']);
+ const late=await h.stream();await h.call('feed');assert.equal((await late.wait('feed-reset')).id,ae.id);
  assert.equal(offline.events.some(e=>e.name==='feed-reset'),false);
  const detail=(await h.call('admin/report?id='+one("SELECT id FROM reports WHERE target_type='post'").id,h.admin)).data;
  assert.equal(detail.media[0].id,evidence.id);
@@ -104,7 +104,7 @@ test('Animation follows source timing, uses final title, excludes credits; live 
  assert.doesNotMatch(source,/Mathias Volk|Martin Hannes|Ubeydullah|Hohlweg|War Games|DAVID_LIGHTMAN|BETTEROV/);
  const handlers={},windows={},streams=[],plays=[],options=[];
  class Stream{constructor(){this.handlers={};streams.push(this);}addEventListener(n,f){this.handlers[n]=f;}close(){this.closed=true;}}
- const document={hidden:false,addEventListener:(n,f)=>handlers[n]=f,querySelectorAll:()=>[]};
+ const document={hidden:false,querySelector:()=>({}),addEventListener:(n,f)=>handlers[n]=f,querySelectorAll:()=>[]};
  const client=vm.createContext({document,window:{addEventListener:(n,f)=>windows[n]=f},EventSource:Stream,FeedResetAnimation:{play:(e,o)=>{plays.push(e);options.push(o);},stop(){}},fetch:()=>{throw Error('Preview must not send a request');},JSON,Number});
  vm.runInContext(readFileSync(new URL('public/reset-live.js',import.meta.url),'utf8'),client);
  const message={data:JSON.stringify({id:1,startAt:3000,ends:111000,serverNow:0})};
@@ -112,7 +112,7 @@ test('Animation follows source timing, uses final title, excludes credits; live 
  document.hidden=true;handlers.visibilitychange();assert.equal(streams[0].closed,true);
  document.hidden=false;handlers.visibilitychange();assert.equal(streams.length,2);assert.equal(plays.length,1);
  document.hidden=true;streams[1].handlers['feed-reset']({data:JSON.stringify({id:2,startAt:3000,ends:111000,serverNow:0})});assert.equal(plays.length,1);
- client.user={isAdmin:true};handlers.click({target:{closest:()=>true}});assert.equal(plays.length,2);assert.equal(options[1].preview,true);
+
 });
 
 
@@ -132,3 +132,18 @@ test('Public soundtrack supports browser HEAD, byte-range seeking and the exact 
  const response=await fetch(h.base+'/reset-film.mp4',{headers:{Range:'bytes=0-1023'}});
  assert.equal(response.status,206);assert.deepEqual(Buffer.from(await response.arrayBuffer()),film.subarray(0,1024));
  });
+
+test('Admin live test broadcasts, late joins share timeline, no deletion, no replay after expiry',async t=>{
+ const h=await app(t),file=h.media(200),a=await h.stream(),b=await h.stream();
+ assert.equal((await h.call('admin/reset-preview',h.owner,'{}')).status,403);
+ const response=await h.call('admin/reset-preview',h.admin,'{}');assert.equal(response.status,200);
+ const event=response.data.event;assert.equal(event.preview,true);
+ assert.equal((await a.wait('feed-reset')).id,event.id);assert.equal((await b.wait('feed-reset')).id,event.id);
+ assert.equal(existsSync(file.file),true);assert.equal(h.one('SELECT deleted FROM posts WHERE id=?',file.pid).deleted,0);
+ h.run('UPDATE reset_events SET created=? WHERE id=?',Date.now()-23000,event.id);
+ const late=await h.stream(),joined=await late.wait('feed-reset');
+ assert.equal(joined.id,event.id);assert.ok(joined.serverNow-joined.startAt>=20000);assert.equal(joined.preview,true);
+ assert.equal((await h.call('admin/reset-preview',h.admin,'{}')).data.event.id,event.id);
+ h.run('UPDATE reset_events SET ends=? WHERE id=?',Date.now()-1,event.id);
+ const after=await h.stream();assert.deepEqual(after.events.map(x=>x.name),['ready']);
+});

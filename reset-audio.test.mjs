@@ -41,10 +41,10 @@ test('Shared three-second start delay is respected and closing during an unresol
  const promise=h.controller.enable();h.controller.close();done();await promise;assert.equal(h.media.paused,true);
 });
 
-test('Audio asset and scripts are bundled in dependency order; browser preview starts the soundtrack',()=>{
+test('Audio asset and scripts are bundled in dependency order; film player starts its embedded soundtrack',()=>{
  const index=readFileSync(new URL('public/index.html',import.meta.url),'utf8');
  assert.ok(index.indexOf('src="/reset-audio.js"')<index.indexOf('src="/reset-animation.js"'));
  const score=readFileSync(new URL('public/reset-soundtrack.mp3',import.meta.url));assert.ok(score.length>1000000);assert.ok(score.length<4000000);
  const source=readFileSync(new URL('public/reset-animation.js',import.meta.url),'utf8');
- assert.match(source,/sound\?\.enable\(\)/);assert.match(source,/sound\?\.sync\(true\)/);assert.match(source,/sound\?\.close\(\)/);
+ assert.match(source,/video.src='\/reset-film\.mp4'/);assert.match(source,/await video.play\(\)/);assert.match(source,/video.muted=true/);assert.match(source,/video.pause\(\)/);
 });

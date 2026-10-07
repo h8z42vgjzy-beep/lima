@@ -125,14 +125,14 @@ function play(event={},options={}){
  const dialog=doc.createElement('dialog');dialog.className='feed-reset-dialog';
  dialog.setAttribute('aria-label',preview?'Reset-Film Vorschau ohne Löschen':'Feed Reset – Live-Ereignis');
  dialog.innerHTML='<div class="reset-toolbar"><span class="reset-mode"></span><div><button type="button" data-reset="sound">Ton aus</button><button type="button" data-reset="skip">+10 Sekunden</button><button type="button" data-reset="close">Schließen ×</button></div></div><video playsinline preload="auto" aria-label="Feed Water Reset mit Originalton"></video><p class="reset-status" role="status"></p>';
- dialog.querySelector('.reset-mode').textContent=preview?'VORSCHAU · OHNE LÖSCHEN':'LIVE · FEED RESET';
- dialog.querySelector('[data-reset="skip"]').hidden=!preview;
+ dialog.querySelector('.reset-mode').textContent=preview?'LIVE-TEST · OHNE LÖSCHEN':'LIVE · FEED RESET';
+ dialog.querySelector('[data-reset="skip"]').hidden=!preview||!!options.shared;
  const video=dialog.querySelector('video'),status=dialog.querySelector('.reset-status'),sound=dialog.querySelector('[data-reset="sound"]');
  video.src='/reset-film.mp4';video.volume=.7;
- const base=scope.performance.now(),offset=preview?0:Number(event.serverNow)-Number(event.startAt);
+ const base=scope.performance.now(),offset=preview&&!options.shared?0:Number(event.serverNow)-Number(event.startAt);
  let skipped=0,closed=false,started=false,timer=0;
  const elapsed=()=>Math.max(0,(scope.performance.now()-base+(Number.isFinite(offset)?offset:0)+skipped)/1000);
- const ready=()=>preview||scope.performance.now()-base+offset>=0;
+ const ready=()=>(preview&&!options.shared)||scope.performance.now()-base+offset>=0;
  function align(force=false){if(video.readyState<1||video.seeking)return;const target=Math.min(elapsed(),Math.max(0,video.duration-.05));if(force||Math.abs(video.currentTime-target)>1.5)video.currentTime=target;}
  function label(){sound.textContent=video.muted?'Ton an':'Ton aus';sound.setAttribute('aria-pressed',String(!video.muted));sound.classList.toggle('needs-tap',video.muted);}
  async function start(){

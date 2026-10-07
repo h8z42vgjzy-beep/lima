@@ -1,13 +1,29 @@
-// One live event for connected clients; no replay when a device reconnects.
+// Shared active timeline; new connections join only while the event is running.
 export const RESET_DURATION_MS = 136000;
 export const RESET_LEAD_MS = 3000;
 export function createResetService({all,one,run,transact,now,storageInfo,removeMedia,cleanupExpired,reportAllowsMedia}) {
   const clients=new Set();
   let lastResetAt=-Infinity;
+  function current(){
+    const event=one('SELECT * FROM reset_events WHERE ends>? ORDER BY id DESC LIMIT 1',now());
+    return event?{id:event.id,created:event.created,startAt:event.created+RESET_LEAD_MS,ends:event.ends,preview:!!event.preview,serverNow:now()}:null;
+  }
+  function publish(event){
+    const packet=`event: feed-reset\ndata: ${JSON.stringify(event)}\n\n`;
+    for(const client of clients)if(!client.destroyed&&!client.writableEnded)client.write(packet);
+  }
+  function preview(){
+    const running=current();if(running)return running;
+    const created=now(),ends=created+RESET_LEAD_MS+RESET_DURATION_MS;
+    const result=run('INSERT INTO reset_events(created,ends,preview) VALUES(?,?,1)',created,ends);
+    const event={id:Number(result.lastInsertRowid),created,startAt:created+RESET_LEAD_MS,ends,preview:true,serverNow:created};
+    publish(event);return event;
+  }
   function stream(req,res) {
     res.writeHead(200,{'Content-Type':'text/event-stream; charset=utf-8','Cache-Control':'no-store, no-transform','Connection':'keep-alive','X-Accel-Buffering':'no'});
     res.write(`event: ready\ndata: ${JSON.stringify({serverNow:now()})}\n\n`);
     clients.add(res);
+    const active=current();if(active)res.write(`event: feed-reset\ndata: ${JSON.stringify(active)}\n\n`);
     const heartbeat=setInterval(()=>res.write(': keepalive\n\n'),15000);heartbeat.unref?.();
     res.on('close',()=>{clearInterval(heartbeat);clients.delete(res);});
   }
@@ -38,9 +54,8 @@ export function createResetService({all,one,run,transact,now,storageInfo,removeM
       return {id:Number(result.lastInsertRowid),created,startAt,ends,serverNow:created};
     });
     lastResetAt=created;
-    const packet=`event: feed-reset\ndata: ${JSON.stringify(event)}\n\n`;
-    for(const client of clients){if(!client.destroyed&&!client.writableEnded)client.write(packet);}
+    publish(event);
     return event;
   }
-  return {stream,check};
+  return {stream,check,preview,current};
 }
