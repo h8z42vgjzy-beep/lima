@@ -17,6 +17,7 @@ function time(t){const mins=Math.max(0,Math.floor((Date.now()-t)/60000));if(mins
 function updateUser(){
  globalThis.refreshModerationNotices?.();
   $('#account-nav').innerHTML=user?`<button class="inbox-button" data-action="chats" aria-label="Chat-Anfragen und Nachrichten">${icon('mail')}<span id="inbox-count"></span></button>${user.isAdmin?'<button class="mini-button" data-action="admin">Moderation</button>':''}<button class="account-button" data-action="profile">${avatar(user)}<span class="account-name">${esc(user.name)}</span>${user.plus?'<span class="plus-tag">PLUS</span>':''}</button>`:'<button class="login-link" data-action="login">Anmelden</button><button class="button dark small" data-action="register">Dabei sein <span>↗</span></button>';
+  globalThis.activityUI?.sync();
   updateWallet();
   const cta=$('#hero-cta');cta.dataset.action=user?'compose':'register';cta.innerHTML=user?'Dein nächster Konter <span>↗</span>':'Misch dich ein <span>↗</span>';
   $('#composer-avatar').className='avatar '+(user?.color||'lavender');$('#composer-avatar').textContent=user?user.name[0].toLowerCase()+'.':'f.';

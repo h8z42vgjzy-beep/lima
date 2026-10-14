@@ -6,7 +6,7 @@ const read = name => readFileSync(new URL(name, import.meta.url), 'utf8');
 
 test('Effects release wires every local asset and respects reduced-motion settings', () => {
   const html=read('public/index.html'),server=read('server.mjs'),css=read('public/action.css');
-  assert.match(html,/name="f-release" content="8.1"/);
+  assert.match(html,/name="f-release" content="9"/);
   for(const file of ['music-player.js','dino-client.js','discovery-effects.js','features.js','app.js']){
     assert.match(html,new RegExp(`src="/${file.replace('.','\\.')}"`));
     assert.match(server,new RegExp(`/${file.replace('.','\\.')}`));
@@ -15,7 +15,7 @@ test('Effects release wires every local asset and respects reduced-motion settin
   assert.match(css,/\.dino-flash\.near/);assert.match(css,/\.dino-flash\.win/);assert.match(css,/\.dino-stage\.dino-crash/);
 });
 
-test('Four discoveries have names, local-only progress and no wallet or API operations', () => {
+test('Four discoveries have names, legacy effects and server-backed discovery hook', () => {
   const script=read('public/discovery-effects.js');
   for(const id of ['flowers','bloom','comet','footer'])assert.match(script,new RegExp(`${id}:`));
   assert.match(script,/f_discoveries/);assert.match(script,/prefers-reduced-motion/);

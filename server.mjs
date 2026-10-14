@@ -1,3 +1,4 @@
+import { createActivity } from './activity.mjs';
 import http from 'node:http';
 import { DatabaseSync } from 'node:sqlite';
 import { randomBytes, scrypt, timingSafeEqual, createHash } from 'node:crypto';
@@ -17,7 +18,7 @@ const root = path.dirname(fileURLToPath(import.meta.url));
 const staticCandidates = [path.join(root, 'public'), root];
 // A complete new client takes priority over an old copy in the other layout.
 const staticRoot = staticCandidates.filter(directory => {
-  return ['index.html','music-player.js','dino-client.js','discovery-effects.js','reset-animation.js','reset-audio.js','reset-soundtrack.mp3','reset-film.mp4','manifest.webmanifest','sw.js','pwa.js','pwa.css','moderation-notices.js','moderation-notices.css','reset-live.js','reset-animation.css','action.css','features.js','app.js'].every(file=>existsSync(path.join(directory,file)));
+  return ['index.html','music-player.js','dino-client.js','discovery-effects.js','reset-animation.js','reset-audio.js','reset-soundtrack.mp3','reset-film.mp4','manifest.webmanifest','sw.js','pwa.js','pwa.css','moderation-notices.js','moderation-notices.css','activity-ui.js','activity.css','reset-live.js','reset-animation.css','action.css','features.js','app.js'].every(file=>existsSync(path.join(directory,file)));
 }).sort((a,b)=>{
   const version=directory=>Number(readFileSync(path.join(directory,'index.html'),'utf8').match(/name="f-release" content="([0-9.]+)"/)?.[1]||0);
   return version(b)-version(a);
@@ -113,6 +114,7 @@ const safeUser=u=>u ? {id:u.id,name:u.name,color:u.color,isAdmin:!!u.is_admin,ge
 const blocked=(a,b)=>!!one('SELECT 1 FROM blocks WHERE (user_id=? AND target=?) OR (user_id=? AND target=?)',a,b,b,a);
 function chatAccess(user,rid){const r=one('SELECT * FROM requests WHERE id=?',rid);if(!user||!r||r.status!=='accepted'||![r.sender,r.receiver].includes(user.id)||blocked(r.sender,r.receiver))throw [403,'Dieser Chat ist nicht freigegeben.'];return r;}
 function postAccess(uid,pid){const p=one('SELECT * FROM posts WHERE id=? AND deleted=0 AND (expires IS NULL OR expires>?)',pid,now());if(!p||blocked(uid,p.user_id))throw [404,'Dieser Beitrag ist nicht mehr verfügbar.'];return p;}
+const activity=await createActivity({db,one,all,run,now,dataDir,blocked,ledger,transact});
 const games=createGameService({db,one,all,run,now,chatAccess});
 const dino=createDinoService({one,run,now,chatAccess,assertAvailable(g){
   for(const id of [g.creator,g.opponent]){const u=one('SELECT * FROM users WHERE id=?',id);if(!u)throw [403,'Konto nicht verfügbar.'];requireActive(u);chatAccess(u,g.request_id);}
@@ -147,9 +149,11 @@ staticFiles['/features.js']=['features.js','text/javascript; charset=utf-8'];
 staticFiles['/features.css']=['features.css','text/css; charset=utf-8'];
 staticFiles['/music-player.js']=['music-player.js','text/javascript; charset=utf-8'];
 staticFiles['/dino-client.js']=['dino-client.js','text/javascript; charset=utf-8'];
+staticFiles['/activity-ui.js']=['activity-ui.js','text/javascript; charset=utf-8'];
+staticFiles['/activity.css']=['activity.css','text/css; charset=utf-8'];
 staticFiles['/discovery-effects.js']=['discovery-effects.js','text/javascript; charset=utf-8'];
 staticFiles['/action.css']=['action.css','text/css; charset=utf-8'];
-for(const name of ['reset-animation.js','reset-audio.js','reset-live.js','reset-animation.css'])staticFiles['/'+name]=[name,name.endsWith('.css')?'text/css; charset=utf-8':'text/javascript; charset=utf-8'];
+for(const name of ['reset-animation.js','reset-audio.js','activity-ui.js','activity.css','reset-live.js','reset-animation.css'])staticFiles['/'+name]=[name,name.endsWith('.css')?'text/css; charset=utf-8':'text/javascript; charset=utf-8'];
 for(const [name,mime] of [['manifest.webmanifest','application/manifest+json'],['sw.js','text/javascript; charset=utf-8'],['pwa.js','text/javascript; charset=utf-8'],['pwa.css','text/css; charset=utf-8'],['moderation-notices.js','text/javascript; charset=utf-8'],['moderation-notices.css','text/css; charset=utf-8'],['offline.html','text/html; charset=utf-8'],...['app-icon-192.png','app-icon-512.png','app-icon-maskable.png','apple-touch-icon.png'].map(name=>[name,'image/png'])])staticFiles['/'+name]=[name,mime];
 staticFiles['/reset-film.mp4']=['reset-film.mp4','video/mp4'];
 staticFiles['/reset-soundtrack.mp3']=['reset-soundtrack.mp3','audio/mpeg'];
@@ -185,6 +189,8 @@ const server=http.createServer(async(req,res)=>{
       if(route==='reset-stream')return resetService.stream(req,res,user);
       if(!user)throw [401,'Melde dich an, um mitzumachen.'];
       if(route==='moderation/notices')return send(200,{notices:all('SELECT id,action,body,fine_percent,fine_amount,created,read_at FROM moderation_notices WHERE user_id=? ORDER BY id DESC LIMIT 100',user.id)});
+      if(route==='settings')return send(200,{settings:activity.settings(user.id),push:activity.config(),progress:activity.progress(user.id)});
+      if(route==='notifications')return send(200,{notices:activity.list(user.id)});
       if(route==='wallet')return send(200,{...wallet(user.id),entries:all('SELECT description,amount_half/2.0 AS amount,created FROM wallet_entries WHERE user_id=? ORDER BY id DESC LIMIT 50',user.id)});
       if(route==='games')return send(200,games.list(user,idField(Object.fromEntries(url.searchParams),'request')));
       if(route==='dino-stream'){
@@ -270,7 +276,7 @@ const server=http.createServer(async(req,res)=>{
       const rid=Number(parsed.fields.request);const r=one('SELECT * FROM requests WHERE id=?',rid);if(!r||r.status!=='accepted'||![r.sender,r.receiver].includes(user.id)||blocked(r.sender,r.receiver))throw [403,'Dieser Chat ist nicht freigegeben.'];
       if(info.kind!=='image')throw [400,'Im Chat sind nur Bilder erlaubt.'];
       let chatFile;
-      try{const result=transact(()=>{const mediaId=saveMedia(user,file,{requestId:rid,price:0});chatFile=path.join(mediaDir,one('SELECT file_name FROM media WHERE id=?',mediaId).file_name);run('INSERT INTO messages(request_id,sender,body,created,media_id) VALUES(?,?,?,?,?)',rid,user.id,'[Foto:'+mediaId+']',now(),mediaId);return {mediaId};});checkStorage();return send(201,result);}catch(e){if(chatFile){try{unlinkSync(chatFile);}catch{}}throw e;}
+      try{const result=transact(()=>{const mediaId=saveMedia(user,file,{requestId:rid,price:0});chatFile=path.join(mediaDir,one('SELECT file_name FROM media WHERE id=?',mediaId).file_name);run('INSERT INTO messages(request_id,sender,body,created,media_id) VALUES(?,?,?,?,?)',rid,user.id,'[Foto:'+mediaId+']',now(),mediaId);return {mediaId};});activity.notify(r.sender===user.id?r.receiver:r.sender,user.id,'messages',rid,'photo:'+result.mediaId);checkStorage();return send(201,result);}catch(e){if(chatFile){try{unlinkSync(chatFile);}catch{}}throw e;}
     }
     if(!contentType.startsWith('application/json'))throw [403,'Ungültige Anfrage. Bitte lade die Seite neu.'];
     // A custom request header and JSON enforce a same-origin browser request; CORS is never enabled.
@@ -297,11 +303,16 @@ const server=http.createServer(async(req,res)=>{
       return send(200,{user:safeUser(u)});
     }
     if(!user)throw [401,'Melde dich an, um mitzumachen.'];
+    if(route==='settings')return send(200,{settings:activity.save(user.id,b)});
+    if(route==='notifications/read'){activity.read(user.id,idField(b,'id'));return send(200,{ok:true});}
+    if(route==='push/subscribe'){rate('push:'+user.id,15);activity.subscribe(user.id,digest(cookie),b.subscription);return send(200,{ok:true});}
+    if(route==='push/unsubscribe'){activity.unsubscribe(user.id,String(b.endpoint));return send(200,{ok:true});}
+    if(route==='discover'){rate('discovery:'+user.id,30);return send(200,{progress:activity.discover(user.id,b.secret),user:safeUser(one('SELECT * FROM users WHERE id=?',user.id))});}
     if(route==='dino-jump'){requireActive(user);rate('dino-jump:'+user.id,12,1000);idField(b,'game');return send(200,dino.jump(user,b));}
     rate('write:'+user.id,45);
     if(route==='extra')return send(201,extras.create(user,b));
-    if(route==='game-create')return send(201,games.create(user,idField(b,'request'),b.type));
-    if(route==='game-action'){idField(b,'game');return send(200,games.action(user,b));}
+    if(route==='game-create'){const result=games.create(user,idField(b,'request'),b.type);const g=result.game;activity.notify(g.opponent,user.id,'invitations',g.request_id,'invite:'+g.id);return send(201,result);}
+    if(route==='game-action'){idField(b,'game');const result=games.action(user,b),g=result.game;if(g.type==='chess'&&['move','accept','resign'].includes(b.action))activity.notify(g.creator===user.id?g.opponent:g.creator,user.id,'chess',g.request_id,'chess:'+g.id+':'+g.version);return send(200,result);}
     if(route==='chat-photo-open'){
       const m=mediaAccess(user,idField(b,'media'));if(!m.request_id||m.kind!=='image')throw [400,'Kein Chat-Foto.'];
       mediaContent(m);
@@ -310,7 +321,7 @@ const server=http.createServer(async(req,res)=>{
       transact(()=>{if(one('SELECT opened_at FROM media WHERE id=?',m.id).opened_at)throw [410,'Dieses Foto wurde schon geöffnet und kann nicht erneut geöffnet werden.'];run('UPDATE media SET opened_at=? WHERE id=?',now(),m.id);run('INSERT INTO photo_views(media_id,user_id,token,expires) VALUES(?,?,?,?)',m.id,user.id,digest(token),ends);});
       return send(200,{url:`/media/${m.id}?view=${token}`,expires:ends,serverNow:now()});
     }
-    if(route==='logout'){if(cookie)run('DELETE FROM sessions WHERE token=?',digest(cookie));res.setHeader('Set-Cookie','f_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0');return send(200,{ok:true});}
+    if(route==='logout'){if(cookie)run('DELETE FROM push_devices WHERE session=?',digest(cookie));if(cookie)run('DELETE FROM sessions WHERE token=?',digest(cookie));res.setHeader('Set-Cookie','f_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0');return send(200,{ok:true});}
     if(route==='profile-update'){
       const fields=profileFields(b);run('UPDATE users SET gender=?,orientation=?,queer=?,identity_visible=? WHERE id=?',fields.gender,fields.orientation,fields.queer,fields.identityVisible?1:0,user.id);return send(200,{user:safeUser(one('SELECT * FROM users WHERE id=?',user.id))});
     }
@@ -408,7 +419,7 @@ const server=http.createServer(async(req,res)=>{
     if(['flower','save','hide','delete-post','comment'].includes(route)){
       const pid=idField(b,'post');const p=postAccess(user.id,pid);
       if(route==='delete-post'){if(p.user_id!==user.id)throw [403,'Du kannst nur eigene Sprüche löschen.'];transact(()=>{run("DELETE FROM reactions WHERE (kind='post' AND target_id=?) OR (kind='comment' AND target_id IN(SELECT id FROM comments WHERE post_id=?))",pid,pid);run('UPDATE posts SET deleted=1 WHERE id=?',pid);});return send(200,{ok:true});}
-      if(route==='comment'){const content=textField(b,'body',1,280);rate('comment:'+user.id,12);const parent=b.parent==null?null:idField(b,'parent');if(parent){const c=one('SELECT * FROM comments WHERE id=? AND post_id=?',parent,pid);if(!c||blocked(user.id,c.user_id))throw [400,'Dieser Kommentar kann nicht beantwortet werden.'];}const id=run('INSERT INTO comments(user_id,post_id,body,created,parent_id) VALUES(?,?,?,?,?)',user.id,pid,content,now(),parent).lastInsertRowid;return send(201,{id:Number(id)});}
+      if(route==='comment'){const content=textField(b,'body',1,280);rate('comment:'+user.id,12);const parent=b.parent==null?null:idField(b,'parent');if(parent){const c=one('SELECT * FROM comments WHERE id=? AND post_id=?',parent,pid);if(!c||blocked(user.id,c.user_id))throw [400,'Dieser Kommentar kann nicht beantwortet werden.'];}const id=run('INSERT INTO comments(user_id,post_id,body,created,parent_id) VALUES(?,?,?,?,?)',user.id,pid,content,now(),parent).lastInsertRowid;if(parent){const parentOwner=one('SELECT user_id FROM comments WHERE id=?',parent);activity.notify(parentOwner.user_id,user.id,'replies',pid,'reply:'+id);}return send(201,{id:Number(id)});}
       if(route==='hide'){run('INSERT OR IGNORE INTO hidden VALUES(?,?)',user.id,pid);return send(200,{ok:true});}
       if(route==='save'&&!safeUser(user).plus)throw [403,'Deine Spruchsammlung ist eine Plus-Funktion.'];
       if(route==='flower'){
@@ -445,7 +456,7 @@ const server=http.createServer(async(req,res)=>{
     if(route==='message'){
       const rid=idField(b,'request');const r=one('SELECT * FROM requests WHERE id=?',rid);
       if(!r||r.status!=='accepted'||![r.sender,r.receiver].includes(user.id)||blocked(r.sender,r.receiver))throw [403,'Dieser Chat ist nicht freigegeben.'];
-      rate('chat:'+user.id,20);const content=textField(b,'body',1,1000);run('INSERT INTO messages(request_id,sender,body,created) VALUES(?,?,?,?)',rid,user.id,content,now());return send(201,{ok:true});
+      rate('chat:'+user.id,20);const content=textField(b,'body',1,1000);const messageId=run('INSERT INTO messages(request_id,sender,body,created) VALUES(?,?,?,?)',rid,user.id,content,now()).lastInsertRowid;activity.notify(r.sender===user.id?r.receiver:r.sender,user.id,'messages',rid,'message:'+messageId);return send(201,{ok:true});
     }
     throw [404,'Nicht gefunden.'];
   }catch(e){if(!Array.isArray(e))console.error(e);if(!res.headersSent)send(Array.isArray(e)?e[0]:500,{error:Array.isArray(e)?e[1]:'Etwas hat nicht geklappt. Bitte versuche es erneut.'});else res.end();}
