@@ -16,11 +16,11 @@ async function harness(t){
   const base='http://127.0.0.1:'+port;
   const db=new DatabaseSync(path.join(dir,'feindschaft.sqlite'));
   t.after(async()=>{db.close();if(proc.exitCode===null){const done=new Promise(r=>proc.once('exit',r));proc.kill('SIGTERM');await done;}rmSync(dir,{recursive:true,force:true});});
-  function client(){return {cookie:'',id:null,async raw(route,{method='GET',data,headers={}}={}){const h={...headers};if(this.cookie)h.Cookie=this.cookie;if(data!==undefined){method='POST';h['X-F-Request']='1';if(!(data instanceof FormData))h['Content-Type']='application/json';}return fetch(base+route,{method,headers:h,body:data===undefined?undefined:data instanceof FormData?data:JSON.stringify(data)});},async call(route,data){const res=await this.raw('/api/'+route,{data});const cookie=res.headers.get('set-cookie');if(cookie)this.cookie=cookie.split(';')[0];return {status:res.status,data:await res.json()};},async register(name){const r=await this.call('register',{name,password:'TemporaryTest_123',consent:true,adult:true});assert.equal(r.status,200,JSON.stringify(r.data));this.id=r.data.user.id;return this;},async balance(){return (await this.call('me')).data.user.balance;},async upload(route,fields,content=png,name='photo.png'){const f=new FormData();for(const [k,v]of Object.entries(fields))f.set(k,String(v));f.set('file',new Blob([content],{type:'image/png'}),name);return this.call(route,f);}};}
+  function client(){return {cookie:'',id:null,async raw(route,{method='GET',data,headers={}}={}){const h={...headers};if(this.cookie)h.Cookie=this.cookie;if(data!==undefined){method='POST';h['X-F-Request']='1';if(!(data instanceof FormData))h['Content-Type']='application/json';}return fetch(base+route,{method,headers:h,body:data===undefined?undefined:data instanceof FormData?data:JSON.stringify(data)});},async call(route,data){if(data&&!(data instanceof FormData)){if(['request','message','game-create'].includes(route))data={expectedCost:route==='request'?200:5,sendToken:randomUUID(),...data};if(route==='game-action'&&data.action==='accept')data={expectedCost:5,...data};}const res=await this.raw('/api/'+route,{data});const cookie=res.headers.get('set-cookie');if(cookie)this.cookie=cookie.split(';')[0];return {status:res.status,data:await res.json()};},async register(name){const r=await this.call('register',{name,password:'TemporaryTest_123',consent:true,adult:true});assert.equal(r.status,200,JSON.stringify(r.data));this.id=r.data.user.id;return this;},async balance(){return (await this.call('me')).data.user.balance;},async upload(route,fields,content=png,name='photo.png'){const f=new FormData();if(route==='upload-chat')fields={expectedCost:20,sendToken:randomUUID(),...fields};for(const [k,v]of Object.entries(fields))f.set(k,String(v));f.set('file',new Blob([content],{type:'image/png'}),name);return this.call(route,f);}};}
   const alice=await client().register('AlicePhoto'),bob=await client().register('BobPhoto'),eve=await client().register('EvePhoto'),anon=client();
   const category=(await alice.call('categories')).data.categories.find(c=>c.name==='Alltag');
-  const upload=(who,fields={})=>who.upload('upload-post',{body:'Ein Foto mit trockenem Humor.',category:category.id,rights:true,expectedPrice:category.photo_price,uploadToken:randomUUID(),...fields});
-  async function chat(){await alice.call('request',{target:bob.id});const r=(await bob.call('people')).data.requests[0];await bob.call('respond',{request:r.id,status:'accepted'});return r.id;}
+  const upload=(who,fields={})=>who.upload('upload-post',{body:'Ein Foto mit trockenem Humor.',category:category.id,rights:true,viewMode:'permanent',expectedPrice:category.photo_price,uploadToken:randomUUID(),...fields});
+  async function chat(){await alice.call('daily',{});await bob.call('daily',{});await alice.call('request',{target:bob.id});const r=(await bob.call('people')).data.requests[0];await bob.call('respond',{request:r.id,status:'accepted'});return r.id;}
   return {dir,base,db,alice,bob,eve,anon,category,upload,chat,errors:()=>errors};
 }
 
@@ -58,7 +58,7 @@ test('Music upload and seek ranges return uninterrupted exact bytes; deleted mus
   }));
   assert.deepEqual(Buffer.concat(partials),wave);
   const invalid=await bob.raw('/media/'+id,{headers:{Range:'bytes=999999-'}});assert.equal(invalid.status,416);
-  await alice.call('delete-post',{post:r.data.id});assert.equal((await bob.raw('/media/'+id)).status,404);
+  await alice.call('delete-post',{post:r.data.id});assert.equal((await bob.raw('/media/'+id)).status,410);
 });
 
 async function liveStream(t,client,game){
@@ -89,7 +89,7 @@ test('Live Dino uses two authorized streams, shared countdown, simultaneous jump
   assert.equal((await alice.call('dino-jump',{game:g.id,seq:1})).data.repeated,true);
   assert.equal((await eve.call('dino-jump',{game:g.id,seq:1})).status,403);
   assert.equal((await alice.call('game-action',{game:g.id,version:accepted.data.game.version,action:'move',cell:0})).status,400);
-  assert.equal(await alice.balance(),0);assert.equal(await bob.balance(),0);
+  assert.equal(await alice.balance(),95);assert.equal(await bob.balance(),295);
   await bob.call('block',{target:alice.id});const stopped=await a.next(s=>s.phase==='cancelled');assert.match(stopped.reason,/freigegeben/);
   assert.equal((await alice.raw('/api/dino-stream?game='+g.id)).status,403);
   await a.close();await b.close();
@@ -102,38 +102,38 @@ test('Mandatory category, priced uploads, atomic split, real photo bytes and ide
   assert.equal((await upload(alice,{category:999999})).status,400);
   assert.equal((await upload(eve)).status,400);assert.equal(await eve.balance(),0);
   assert.equal((await upload(alice,{expectedPrice:0})).status,409);
-  const bad=await alice.upload('upload-post',{body:'Kein echtes Bild.',category:category.id,rights:true,expectedPrice:5,uploadToken:randomUUID()},Buffer.from('<script>bad</script>'));
+  const bad=await alice.upload('upload-post',{body:'Kein echtes Bild.',category:category.id,rights:true,expectedPrice:50,uploadToken:randomUUID()},Buffer.from('<script>bad</script>'));
   assert.equal(bad.status,400);assert.equal(await alice.balance(),300);
   assert.equal(readdirSync(path.join(h.dir,'media')).length,0);
   const token=randomUUID(),created=await upload(alice,{uploadToken:token});assert.equal(created.status,201,JSON.stringify(created.data));
-  const id=created.data.mediaId,pid=created.data.id;assert.equal(await alice.balance(),295);
-  const repeat=await upload(alice,{uploadToken:token});assert.equal(repeat.data.mediaId,id);assert.equal(await alice.balance(),295);
+  const id=created.data.mediaId,pid=created.data.id;assert.equal(await alice.balance(),250);
+  const repeat=await upload(alice,{uploadToken:token});assert.equal(repeat.data.mediaId,id);assert.equal(await alice.balance(),250);
   assert.equal((await anon.raw('/media/'+id)).status,401);
   assert.equal((await bob.raw('/media/'+id)).status,403);
-  assert.equal((await eve.call('unlock',{media:id,expectedPrice:5})).status,400);
+  assert.equal((await eve.call('unlock',{media:id,expectedPrice:50})).status,400);
   assert.equal((await bob.call('unlock',{media:id,expectedPrice:1})).status,409);
   assert.equal(await bob.balance(),300);
-  const bought=await Promise.all([bob.call('unlock',{media:id,expectedPrice:5}),bob.call('unlock',{media:id,expectedPrice:5}),bob.call('unlock',{media:id,expectedPrice:5})]);
-  assert.equal(bought.filter(x=>x.data.charged===5).length,1);
-  assert.equal(await bob.balance(),295);assert.equal(await alice.balance(),297.5);
+  const bought=await Promise.all([bob.call('unlock',{media:id,expectedPrice:50}),bob.call('unlock',{media:id,expectedPrice:50}),bob.call('unlock',{media:id,expectedPrice:50})]);
+  assert.equal(bought.filter(x=>x.data.charged===50).length,1);
+  assert.equal(await bob.balance(),250);assert.equal(await alice.balance(),275);
   const image=await bob.raw('/media/'+id);assert.equal(image.status,200);assert.equal(image.headers.get('content-type'),'image/png');assert.deepEqual(Buffer.from(await image.arrayBuffer()),png);
   assert.match(image.headers.get('cache-control'),/no-store/);
   const head=await bob.raw('/media/'+id,{method:'HEAD'});assert.equal(head.status,200);assert.equal((await head.arrayBuffer()).byteLength,0);
   const partial=await bob.raw('/media/'+id,{headers:{Range:'bytes=0-7'}});assert.equal(partial.status,206);assert.deepEqual(Buffer.from(await partial.arrayBuffer()),png.subarray(0,8));
   assert.equal((await bob.call('feed')).data.posts.find(p=>p.id===pid).media.unlocked,true);
   assert.equal((await alice.call('feed')).data.posts.find(p=>p.id===pid).media.owned,true);
-  assert.equal((await bob.call('unlock',{media:id,expectedPrice:5})).data.charged,0);
-  assert.equal((await alice.call('unlock',{media:id,expectedPrice:5})).data.charged,0);
-  assert.equal(await bob.balance(),295);
-  assert.equal((await alice.call('wallet')).data.entries[0].amount,2.5);
+  assert.equal((await bob.call('unlock',{media:id,expectedPrice:50})).data.charged,0);
+  assert.equal((await alice.call('unlock',{media:id,expectedPrice:50})).data.charged,0);
+  assert.equal(await bob.balance(),250);
+  assert.equal((await alice.call('wallet')).data.entries[0].amount,25);
   const removed=await upload(alice);const file=db.prepare('SELECT file_name FROM media WHERE id=?').get(removed.data.mediaId);
   unlinkSync(path.join(h.dir,'media',file.file_name));
-  const before=await bob.balance();assert.equal((await bob.call('unlock',{media:removed.data.mediaId,expectedPrice:5})).status,410);assert.equal(await bob.balance(),before);
+  const before=await bob.balance();assert.equal((await bob.call('unlock',{media:removed.data.mediaId,expectedPrice:50})).status,410);assert.equal(await bob.balance(),before);
   const expired=await upload(alice);db.prepare('UPDATE posts SET expires=? WHERE id=?').run(Date.now()-1,expired.data.id);
-  assert.equal((await bob.call('unlock',{media:expired.data.mediaId,expectedPrice:5})).status,404);
+  assert.equal((await bob.call('unlock',{media:expired.data.mediaId,expectedPrice:50})).status,404);
   assert.equal((await alice.raw('/media/'+expired.data.mediaId)).status,404);
   await bob.call('block',{target:alice.id});assert.equal((await bob.raw('/media/'+id)).status,404);
-  assert.equal((await bob.call('unlock',{media:id,expectedPrice:5})).status,404);
+  assert.equal((await bob.call('unlock',{media:id,expectedPrice:50})).status,404);
   for(const route of ['/','/features.js','/features.css','/app.js','/dino-client.js','/discovery-effects.js','/action.css'])assert.equal((await anon.raw(route)).status,200);
   assert.equal((await anon.raw('/server.mjs')).status,404);
   assert.equal(h.errors(),'');
@@ -143,22 +143,22 @@ test('Categories cost nothing, enforce bounds and preserve photo prices after ed
   const {alice,bob,upload}=await harness(t);
   assert.equal((await alice.call('category',{name:'Sonstiges',price:5})).status,400);
   assert.equal((await alice.call('category',{name:'Ungültig',price:0})).status,400);
-  assert.equal((await alice.call('category',{name:'Zu teuer',price:101})).status,400);
-  const c=await alice.call('category',{name:'Astronomie',price:7});assert.equal(c.status,201);assert.equal(await alice.balance(),0);
+  assert.equal((await alice.call('category',{name:'Zu teuer',price:1001})).status,400);
+  const c=await alice.call('category',{name:'Astronomie',price:70});assert.equal(c.status,201);assert.equal(await alice.balance(),0);
   assert.equal((await bob.call('category-update',{category:c.data.id,name:'Fremd',price:3})).status,403);
   await alice.call('daily',{});
-  const p=await upload(alice,{category:c.data.id,expectedPrice:7});assert.equal(p.status,201);
+  const p=await upload(alice,{category:c.data.id,expectedPrice:70});assert.equal(p.status,201);
   await alice.call('category-update',{category:c.data.id,name:'Sterne',price:11});
-  const post=(await bob.call('feed')).data.posts.find(x=>x.id===p.data.id);assert.equal(post.media.open_price,7);assert.equal(post.category,'Sterne');
-  assert.equal((await upload(alice,{category:c.data.id,expectedPrice:7})).status,409);
+  const post=(await bob.call('feed')).data.posts.find(x=>x.id===p.data.id);assert.equal(post.media.open_price,70);assert.equal(post.category,'Sterne');
+  assert.equal((await upload(alice,{category:c.data.id,expectedPrice:70})).status,409);
 });
 
-test('Chat photo: accepted conversation only, no costs, one opening, server-enforced deadline',async t=>{
+test('Chat photo: accepted conversation only, 20 to send, free opening, one opening, server-enforced deadline',async t=>{
   const {alice,bob,eve,anon,chat,db}=await harness(t),rid=await chat();
   const input={request:rid,rights:true};
   assert.equal((await eve.upload('upload-chat',input)).status,403);
   const photo=await alice.upload('upload-chat',input);assert.equal(photo.status,201);const id=photo.data.mediaId;
-  assert.equal(await alice.balance(),0);assert.equal(await bob.balance(),0);
+  assert.equal(await alice.balance(),80);assert.equal(await bob.balance(),300);
   assert.equal((await bob.call('messages?request='+rid)).data.messages[0].photoState,'ready');
   assert.equal((await bob.raw('/media/'+id)).status,410);
   assert.equal((await eve.call('chat-photo-open',{media:id})).status,403);
@@ -175,12 +175,12 @@ test('Chat photo: accepted conversation only, no costs, one opening, server-enfo
   db.prepare('UPDATE media SET created=? WHERE id=?').run(Date.now()-8*86400000,id);
   assert.equal((await alice.raw('/media/'+id)).status,410);
   assert.equal((await bob.call('messages?request='+rid)).data.messages[0].photoState,'expired');
-  assert.equal(await alice.balance(),0);assert.equal(await bob.balance(),0);
+  assert.equal(await alice.balance(),80);assert.equal(await bob.balance(),300);
   await alice.call('message',{request:rid,body:'[Foto:12345]'});
   const fake=(await bob.call('messages?request='+rid)).data.messages.at(-1);assert.equal(fake.mediaId,null);
 });
 
-test('Multiplayer games require consent and enforce turns, membership, versions and zero cost',async t=>{
+test('Multiplayer games require consent and enforce turns, membership, versions and free moves',async t=>{
   const {alice,bob,eve,chat}=await harness(t),rid=await chat();
   assert.equal((await eve.call('games?request='+rid)).status,403);
   assert.equal((await eve.call('game-create',{request:rid,type:'tic-tac-toe'})).status,403);
@@ -214,7 +214,7 @@ test('Multiplayer games require consent and enforce turns, membership, versions 
   const whiteView=(await alice.call('games?request='+rid)).data.games.find(x=>x.id===chess.id);assert.equal(whiteView.legalMoves,undefined);
   chess=(await bob.call('game-action',{game:chess.id,version:persisted.version,action:'resign'})).data.game;
   assert.equal(chess.status,'finished');assert.equal(chess.winner,alice.id);
-  assert.equal(await alice.balance(),0);assert.equal(await bob.balance(),0);
+  assert.equal(await alice.balance(),80);assert.equal(await bob.balance(),280);
   await alice.call('block',{target:bob.id});assert.equal((await bob.call('games?request='+rid)).status,403);
 });
 
@@ -249,14 +249,14 @@ test('Reported photos: moderator access is limited to the report and its specifi
   const detail=await eve.call('admin/report?id='+report.data.id);assert.equal(detail.data.media[0].id,m);
   assert.equal((await eve.raw(detail.data.media[0].url)).status,200);
   assert.equal((await bob.raw(detail.data.media[0].url)).status,403);
-  await alice.call('request',{target:eve.id});const other=(await eve.call('people')).data.requests[0];await eve.call('respond',{request:other.id,status:'accepted'});
+  db.prepare("INSERT INTO daily_claims VALUES(?,'extra-fixture',300,0)").run(alice.id);await alice.call('request',{target:eve.id});const other=(await eve.call('people')).data.requests[0];await eve.call('respond',{request:other.id,status:'accepted'});
   const privatePhoto=(await alice.upload('upload-chat',{request:other.id,rights:true})).data.mediaId;
   const limited=await eve.call('admin/report?id='+report.data.id);assert.equal(limited.data.media.some(x=>x.id===privatePhoto),false);
   assert.equal((await eve.raw('/api/admin/media?report='+report.data.id+'&media='+privatePhoto)).status,403);
   db.prepare('UPDATE media SET expires=? WHERE id=?').run(Date.now()-1,m);
   assert.equal((await eve.raw(detail.data.media[0].url)).status,403);
   db.prepare('INSERT INTO wallet_entries(user_id,operation,amount_half,description,created) VALUES(?,?,?,?,?)').run(alice.id,'fixture-credit',11,'Testguthaben',Date.now());
-  assert.equal(await alice.balance(),5.5);
+  assert.equal(await alice.balance(),165.5);
   assert.equal((await eve.call('admin/action',{report:report.data.id,action:'warn',fine:100})).status,200);
   assert.equal(await alice.balance(),0,'100 % removes fractional balances too');
 });

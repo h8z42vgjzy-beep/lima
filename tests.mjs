@@ -1,4 +1,5 @@
 import test from 'node:test';
+import {randomUUID} from 'node:crypto';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -10,9 +11,9 @@ test('Registration, feed, reactions, chat consent, privacy, blocking and trial l
   const port=18973;
   const proc=spawn(process.execPath,['server.mjs'],{cwd:import.meta.dirname,env:{...process.env,PORT:String(port),F_DATA_DIR:dir},stdio:['ignore','pipe','pipe']});
   try {
-    await new Promise((resolve,reject)=>{proc.stdout.once('data',resolve);proc.once('error',reject);proc.once('exit',c=>reject(Error('Server exited '+c)));});
+    await new Promise((resolve,reject)=>{proc.stdout.on('data',x=>{if(String(x).includes('Feindschaft läuft'))resolve();});proc.once('error',reject);proc.once('exit',c=>reject(Error('Server exited '+c)));});
     const base=`http://127.0.0.1:${port}/api/`;
-    const client=()=>({cookie:'',async call(route,data,header=true){const headers={};if(this.cookie)headers.Cookie=this.cookie;if(data!==undefined){headers['Content-Type']='application/json';if(header)headers['X-F-Request']='1';}const res=await fetch(base+route,{method:data===undefined?'GET':'POST',headers,body:data===undefined?undefined:JSON.stringify(data)});const cookie=res.headers.get('set-cookie');if(cookie)this.cookie=cookie.split(';')[0];return {status:res.status,data:await res.json(),cookie};}});
+    const client=()=>({cookie:'',async call(route,data,header=true){if(data&&['message','request'].includes(route))data={expectedCost:route==='request'?200:5,sendToken:randomUUID(),...data};const headers={};if(this.cookie)headers.Cookie=this.cookie;if(data!==undefined){headers['Content-Type']='application/json';if(header)headers['X-F-Request']='1';}const res=await fetch(base+route,{method:data===undefined?'GET':'POST',headers,body:data===undefined?undefined:JSON.stringify(data)});const cookie=res.headers.get('set-cookie');if(cookie)this.cookie=cookie.split(';')[0];return {status:res.status,data:await res.json(),cookie};}});
     const anon=client(),alice=client(),bob=client(),eve=client();
     assert.equal((await anon.call('post',{body:'Hello world'})).status,401);
     assert.equal((await anon.call('register',{name:'NoConsent',password:'TestPassword12',consent:false})).status,400);
@@ -107,7 +108,7 @@ test('Registration, feed, reactions, chat consent, privacy, blocking and trial l
     assert.equal((await alice.call('delete-post',{post:pid})).status,200);
     assert.equal((await alice.call('comments?post='+pid)).status,404);
     assert.equal((await bob.call('me')).data.user.balance,0);
-    assert.equal((await alice.call('me')).data.user.balance,300);
+    assert.equal((await alice.call('me')).data.user.balance,95);
     assert.equal((await alice.call('logout',{})).status,200);
     assert.equal((await alice.call('me')).data.user,null);
     console.log('Multi-user functional and authorization checks passed.');

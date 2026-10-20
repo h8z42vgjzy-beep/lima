@@ -1,0 +1,5 @@
+Dieses Paket aktualisiert eine vorhandene Feindschaft-Website.
+Entpacken und die Dateien im bestehenden GitHub-Repository aktualisieren.
+Die vorhandenen Dateien public/reset-film.mp4 und public/reset-soundtrack.mp3 behalten. Sie sind in diesem kleinen Paket nicht enthalten.
+Keine Datenbank und keine Disk ersetzen.
+Weitere Schritte stehen in UPDATE-V10.md.

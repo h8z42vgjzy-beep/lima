@@ -34,7 +34,7 @@ export function createResetService({all,one,run,transact,now,storageInfo,removeM
     if(!storage.total||storage.used/storage.total<.85||now()-lastResetAt<RESET_DURATION_MS+RESET_LEAD_MS)return null;
     const reports=all("SELECT * FROM reports WHERE status='open'");
     const media=all('SELECT * FROM media WHERE removed=0');
-    const protectedMedia=new Set(media.filter(m=>reports.some(r=>reportAllowsMedia(r,m))).map(m=>m.id));
+    const protectedMedia=new Set(media.filter(m=>m.view_mode==='permanent'||reports.some(r=>reportAllowsMedia(r,m))).map(m=>m.id));
     const protectedPosts=new Set(media.filter(m=>protectedMedia.has(m.id)&&m.post_id).map(m=>m.post_id));
     for(const report of reports){
       if(report.target_type==='post')protectedPosts.add(report.target_id);
