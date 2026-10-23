@@ -1,63 +1,81 @@
-Feindschaft – Reparatur für Blockieren, Entblockieren und Chat-Anfragen
+Feindschaft – Chat-Reparatur 2 mit automatischer Aktivierung
 
-Ursache:
-Die bisherige Funktion hat bei einer Blockierung jede bestehende Anfrage als
-abgelehnt gespeichert. Entblockieren hat diesen Status nicht repariert.
-Gleichzeitig hat der alte Eintrag jede neue Anfrage verhindert.
+Warum diese Fassung:
+Die alte Fehlermeldung 'Zwischen euch gibt es bereits eine Anfrage' steht nur
+in der ursprünglichen Anfragefunktion. Das vorige Paket musste zusätzlich
+über den Render-Build aktiviert werden. Diese Fassung aktiviert sich beim
+Installieren UND bei jedem normalen Start über yarn start / npm start.
 
-So installierst du diese gezielte Reparatur:
+HOCHLADEN
 1. ZIP entpacken.
-2. chat-repair.mjs und apply-chat-repair.mjs bei GitHub in den Hauptordner
-   deines bestehenden Repositorys lima hochladen, neben server.mjs.
-3. Änderungen speichern/committen.
-4. In Render den Service lima öffnen. Unter Settings den Build Command setzen:
+2. Diese DREI Dateien im bestehenden GitHub-Repository ins Hauptverzeichnis
+   neben server.mjs hochladen:
+     package.json
+     apply-chat-repair.mjs
+     chat-repair.mjs
+   Vorhandene gleichnamige Dateien ersetzen und den Commit speichern.
+   Bitte die ZIP nicht einfach als ZIP hochladen.
+3. In Render den vorhandenen Service lima öffnen und das neueste Commit
+   deployen. Falls kein Auto-Deploy startet: Manual Deploy -> Deploy latest commit.
+4. Build Command kann 'yarn' sein. Ein vorheriger Befehl
+   'node apply-chat-repair.mjs && yarn' funktioniert ebenfalls.
+   Start Command muss 'yarn start' oder 'npm start' sein.
+   Falls dort ausdrücklich 'node server.mjs' steht, ändere ihn auf 'yarn start'.
+5. Im Start-Log muss diese Zeile stehen:
+     CHAT-REPAIR-2 AKTIV – Status: /api/chat-repair-status
+6. Erst nach 'Your service is live' alle alten App-Fenster und Browser-Tabs
+   schließen und die Website neu öffnen.
 
-   node apply-chat-repair.mjs && yarn
+AKTIVIERUNG OHNE ANMELDUNG PRÜFEN
+Diese Adresse in einem neuen Tab öffnen:
+https://lima-te6q.onrender.com/api/chat-repair-status
 
-5. Start Command bleibt: yarn start
-6. Manual Deploy / Deploy latest commit auslösen, falls noch kein neuer Build läuft.
-7. Auf 'Your service is live' warten, Website/App schließen und neu öffnen.
+Es muss diese Antwort erscheinen:
+{"active":true,"repair":"chat-repair-2","version":2}
 
-WICHTIG: Beide .mjs-Dateien müssen im Hauptordner liegen. Wenn vorher schon
-'npm install' statt 'yarn' verwendet wurde, lautet der Build Command:
-node apply-chat-repair.mjs && npm install
+Wenn eine Fehlermeldung, 'Nicht gefunden' oder die normale Startseite erscheint,
+ist diese Reparatur dort noch nicht aktiv. Dann nicht erneut Punkte für Anfragen
+riskieren, sondern den neuen Render-Deploy/Start-Log prüfen. Ein erfolgreiches
+Hochladen bei GitHub alleine beweist noch nicht, welcher Code auf Render läuft.
 
-Die Reparatur aktualisiert deine bestehende server.mjs und app.js während des
-Builds. Du ersetzt nicht deine gesamte Website. Der geänderte Build Command
-bleibt bestehen, damit die Reparatur auch bei späteren Deployments aktiv bleibt.
-Das Skript kann wiederholt laufen. Bei unbekanntem Quellcode bricht es vor dem
-Schreiben ab, statt auf Verdacht Dateien zu verändern.
+Zusätzlich steht in der Chat-Übersicht: 'Chat-Reparatur 2 aktiv'. Wenn die
+Statusadresse korrekt antwortet, dieser Hinweis aber fehlt, sind noch alte
+Oberflächendateien geöffnet: alle Tabs/Apps schließen und neu öffnen.
 
-Was danach gilt:
-- Eine neue Blockierung sperrt den Zugriff auf den Chat. Die bisherige Zustimmung
-  und der Verlauf bleiben gespeichert.
-- Nach dem Entblockieren ist ein zuvor angenommener Chat wieder nutzbar, solange
-  keine Blockierung der anderen Person mehr besteht.
-- Ein alter, schon kaputter/abgelehnter Chat erhält in der Chat-Übersicht den
-  Knopf 'Erneut anfragen · kostenlos'. Eine Person drückt ihn; die andere Person
-  muss die neue Anfrage annehmen. Danach ist auch der alte Verlauf wieder da.
-- Eine neue Verbindung kostet weiterhin 200 Beleidigungen. Bei einer bereits
-  vorhandenen Verbindung werden keine weiteren 200 für die Wiederanfrage abgezogen.
-- Doppelte Anfragen erzeugen keine zweite Abbuchung oder zweite Unterhaltung.
-- Nach erneuter Ablehnung gibt es für Wiederanfragen eine Sieben-Tage-Pause.
-- Vorhandene Abbuchungen werden nicht nachträglich verändert.
-
-So testet ihr euren konkreten Fall:
-1. Beide Personen prüfen unter Profil / Blockierte Profile, ob die jeweils andere
-   Person noch blockiert ist, und entblockieren gegebenenfalls.
-2. Eine Person öffnet die Chat-Übersicht und drückt beim alten Eintrag
-   'Erneut anfragen · kostenlos'.
+BESTEHENDEN CHAT WIEDERHERSTELLEN
+1. Beide Personen prüfen im Profil, ob sie einander noch blockiert haben,
+   und heben ihre jeweilige Blockierung auf.
+2. Eine Person öffnet die Chat-Übersicht und drückt beim alten/abgelehnten Chat
+   'Erneut anfragen · kostenlos'. Keine erneuten 200 Beleidigungen.
 3. Die andere Person öffnet die Chat-Übersicht und nimmt die Anfrage an.
-   Die Übersicht aktualisiert sich bei geöffneter Anzeige innerhalb von ca. 10 s.
-4. Eine Nachricht senden; Lesen bleibt kostenlos, der Versand kostet weiterhin 5.
-5. Zum Prüfen der neuen Logik einmal blockieren und wieder entblockieren:
-   Der angenommene Chat soll danach direkt wieder funktionieren.
+   Die offene Übersicht aktualisiert sich spätestens nach ca. 10 Sekunden.
+4. Danach sind Verlauf und Schreiben wieder erreichbar. Texte lesen kostet
+   nichts; eine neue Textnachricht senden kostet weiterhin 5 Beleidigungen.
 
-Geprüft: 26 automatisierte Tests bestanden. Darunter Blockierung in beide
-Richtungen, Entblockierung, Zustimmung, fremde Zugriffe, bestehender Verlauf,
-kostenlose Wiederanfrage und nur eine Abbuchung für neue Verbindungen. Außerdem
-Foto-Preise, Fotoablauf, Speicher-Reset, Moderationsfunktionen und Spielregeln.
-Nicht auf deinem laufenden Render-Service oder deinen echten Konten ausgeführt.
+NEUE BLOCKIERUNGEN
+Sie sperren den Zugriff, ohne eine bestehende Zustimmung dauerhaft zu
+überschreiben. Nach Entblockieren ist ein angenommener Chat wieder nutzbar,
+solange die andere Person nicht weiterhin blockiert. Alte abgelehnte Datensätze
+werden aus Sicherheitsgründen erst durch die erneute Annahme freigegeben.
+Doppelte Anfragen kosten nicht nochmals. Nach einer weiteren Ablehnung kann
+frühestens nach sieben Tagen erneut kostenlos angefragt werden.
 
-Die Datei chat-repair.test.mjs dokumentiert die speziellen Tests. Zum lokalen
-Ausführen wird das bestehende Projekt benötigt; sie muss nicht hochgeladen werden.
+Dieses Paket enthält weder Nutzerdaten noch eine Ersatzdatenbank. Es verändert
+keine Disk-Einstellungen. Frühere Abbuchungen werden nicht nachträglich verändert.
+Die vorhandene Website wird gezielt beim Start angepasst. Bei unbekanntem
+Quellcode bricht die Aktivierung vor Änderungen mit einer verständlichen Meldung
+ab. Das kann nur anhand des tatsächlichen Start-Logs geprüft werden.
+
+PRÜFUNG
+Fünf gezielte automatisierte Tests bestanden:
+- Start über npm start mit der alten ungepatchten Website, ohne extra Build-Befehl,
+  danach Statusantwort, ausgelieferter Oberflächenhinweis und ankommende Anfrage.
+- Upgrade von Reparatur 1; flacher GitHub-Upload; wiederholte Ausführung;
+  unbekannte Quelldateien werden nicht überschrieben.
+- Blockieren, Entblockieren, gegenseitige Blockierung und vorhandener Verlauf.
+- Kostenlose Wiederanfrage alter Chats mit richtiger empfangender Person und
+  nötiger Zustimmung; fremde Konten erhalten keinen Zugriff.
+- Erste Anfrage kostet einmal 200, weitere Wiederholungen nichts; Sieben-Tage-Pause.
+
+Diese Tests liefen in einer isolierten lokalen Umgebung. Der echte Render-Deploy
+und deine Konten wurden nicht aus der Ferne geprüft. Dafür ist die Statusadresse da.
