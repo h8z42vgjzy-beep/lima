@@ -1,0 +1,91 @@
+Feindschaft – Textnachrichten löschen (message-delete-1)
+
+Dieses Update enthält KEINE Standort-/Nähe-Funktion. Du brauchst das frühere
+Standortpaket dafür nicht hochzuladen. Die Chat-Reparatur 2 bleibt enthalten.
+
+INSTALLATION
+1. ZIP herunterladen und entpacken.
+2. Alle enthaltenen Dateien ins Hauptverzeichnis deines bestehenden GitHub-
+   Repositorys lima hochladen, neben server.mjs. Gleichnamige Dateien ersetzen.
+   Die ZIP nicht einfach als ZIP hochladen. Deinen vorhandenen public-Ordner,
+   die anderen Website-Dateien und die Datenbank behalten.
+3. In Render beim bestehenden Service lima:
+   Build Command: yarn
+   Start Command: yarn start
+   npm install und npm start werden ebenfalls unterstützt.
+4. Das neueste Commit deployen. Im Start-Log muss stehen:
+   MESSAGE-DELETE-1 AKTIV – Status: /api/message-delete-status
+5. Nach 'Your service is live' alte Website-Tabs/App-Fenster schließen und
+   neu öffnen.
+
+AKTIVIERUNG PRÜFEN
+https://lima-te6q.onrender.com/api/message-delete-status
+Erwartete Antwort:
+{"active":true,"version":"message-delete-1"}
+
+BEDIENUNG
+Im privaten Chat steht neben jeder Textnachricht ein Knopf 'Löschen'.
+
+Eigene Textnachricht:
+- Nur für mich löschen: Die Nachricht verschwindet nur aus deinem Konto.
+  Die andere Person sieht sie weiterhin.
+- Für beide löschen: Die Nachricht verschwindet aus beiden Chatansichten.
+  Der Text wird aus dem aktiven Nachrichteneintrag entfernt.
+
+Empfangene Textnachricht:
+- Nur für mich löschen: Nur deine Ansicht wird geändert.
+  Für beide löschen steht nicht zur Verfügung. Der Server lehnt das auch
+  dann ab, wenn jemand die Oberfläche oder eine Anfrage manipuliert.
+
+'Für mich' gilt für das ganze Konto, also auch deine weiteren Geräte nach
+Aktualisierung. Bei geöffnetem Chat aktualisiert sich die andere Ansicht
+normalerweise innerhalb von ungefähr 2,5 Sekunden. Offline-Geräte sehen die
+Änderung beim nächsten Laden des Chats.
+
+Abbrechen und die Escape-Taste schließen die Auswahl ohne Löschanfrage.
+Eine bestätigte Löschung kann in dieser Version nicht rückgängig gemacht werden.
+Bereits gelesene Inhalte, Screenshots oder externe Kopien lassen sich nicht
+zurückholen. Die Funktion betrifft Textnachrichten; Foto-Nachrichten werden
+damit nicht verändert.
+
+KOSTEN
+Beide Löschoptionen sind kostenlos. Die bereits bezahlten Versandkosten werden
+nicht erstattet. Das Löschen löst keine weitere Punktebuchung aus.
+
+MELDUNGEN UND AUFBEWAHRUNG
+Wenn eine Nachricht bereits Gegenstand einer offenen Meldung war, bleibt ihr
+Text als Moderationskopie bis zu 28 Tage nach der Löschung prüfbar. Das gilt
+auch für eine offene Nutzermeldung durch die andere Person dieses Chats.
+Die Kopie wird ausschließlich über die bereits berechtigte Moderationsansicht
+angezeigt; in den normalen Chats bleibt die Nachricht entfernt.
+Nicht gemeldete Texte erhalten keine solche Kopie. 'Nur für mich' entfernt
+den Text nicht vom Server, weil ihn die andere Person weiterhin sehen darf.
+Sicherungen beim Hoster können länger bestehen; dieses Update garantiert
+keine sofortige Entfernung aus allen Backups.
+
+TECHNISCH
+Das Paket passt die bestehenden Website-Dateien beim Installieren und bei
+jedem normalen Start gezielt an. Es unterstützt public/ und die bisherige
+flache GitHub-Struktur. Datenbankänderungen sind ergänzend. Es wird keine
+Datenbank ersetzt und kein Nachrichtenverlauf pauschal gelöscht.
+Bei unbekanntem Quellcode bricht die Installation mit einer Meldung ab.
+
+TEST AUF DEINEN GERÄTEN
+1. Mit zwei eigenen Testkonten einen angenommenen Chat öffnen.
+2. Nachricht senden, beim Absender 'Nur für mich löschen' auswählen.
+   Sie muss beim Gegenüber weiterhin zu sehen sein.
+3. Eine zweite Nachricht senden und 'Für beide löschen' wählen.
+   Sie muss in beiden Ansichten verschwinden.
+4. Beim Gegenüber eine empfangene Nachricht auswählen: Dort darf nur die
+   Option 'Nur für mich löschen' erscheinen.
+5. Guthaben prüfen: Durch das Löschen werden keine weiteren Punkte abgezogen.
+
+PRÜFUNG
+11 automatisierte Tests bestanden: serverseitige Rechte, beide Löschbereiche,
+Wiederholungen, Abbrechen, Kontowechsel, Bildausschluss, gemeldete Texte und
+Moderationszugriff, zeitlicher Ablauf der Moderationskopie, kostenlose Löschung,
+Ausblenden vor der 500-Nachrichten-Grenze, normaler Start, wiederholte Installation
+und Aktivierung ohne Standortmodul.
+Die enthaltenen sieben Modul-/Bedienungstests laufen über npm run test:messages.
+Eine echte Safari-/iPhone-Sichtprüfung und der Test auf deinem Render-Service
+stehen nach dem Upload noch aus.
