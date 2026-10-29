@@ -36,9 +36,10 @@ function renderPostMedia(p) {
 function updateUploadPrice() {
   const hint = $('#upload-price'), file = $('#post-file')?.files[0];
   if (!hint) return;
-  let mode=$('#photo-mode');if(!mode){const label=document.createElement('label');label.className='field';label.id='photo-mode-field';label.innerHTML='Foto-Sichtbarkeit<select id="photo-mode"><option value="once">Einmal pro Person · 20 Sekunden</option><option value="permanent">Dauerhaft · bis zur manuellen Löschung</option></select>';hint.before(label);mode=label.querySelector('select');}$('#photo-mode-field').hidden=!file||! /\.(jpe?g|png|webp)$/i.test(file.name);
+  let mode=$('#photo-mode');if(!mode){const label=document.createElement('label');label.className='field';label.id='photo-mode-field';label.innerHTML='Foto-Sichtbarkeit<select id="photo-mode"><option value="once">Einmal pro Person · 20 Sekunden</option><option value="permanent">Mehrfach sichtbar · bis zur Löschung oder Speicherbereinigung</option></select>';hint.before(label);mode=label.querySelector('select');}$('#photo-mode-field').hidden=!file||! /\.(jpe?g|png|webp)$/i.test(file.name);
 
   const category = categories.find(c => String(c.id) === $('#post-category').value);
+  $('#post-category').required = !!file;
   hint.hidden = !file;
   if (!file) { const button=$('#post-form button[type="submit"]');if(button)button.textContent='Beitrag posten ↗'; return; }
   if (!category) { hint.textContent = 'Wähle eine Kategorie, um den Preis vor dem Upload zu sehen.'; return; }
@@ -75,7 +76,7 @@ async function submitFeedPost(e) {
   if (!requireUser('compose')) return;
   const form = e.target, button = e.submitter;
   const body = $('#post-body').value.trim(), category = categories.find(c => String(c.id) === $('#post-category').value);
-  if (!category) { toast('Bitte wähle selbst eine Kategorie aus.'); $('#post-category').focus(); return; }
+  if (!category && $('#post-file').files[0]) { toast('Bitte wähle für die Datei eine Kategorie aus.'); $('#post-category').focus(); return; }
   if (body.length < 3) { toast('Bitte schreibe mindestens drei Zeichen dazu.'); $('#post-body').focus(); return; }
   const file = $('#post-file').files[0];
   button.disabled = true;
@@ -91,7 +92,7 @@ async function submitFeedPost(e) {
       fd.set('body', body); fd.set('category', category.id); fd.set('rights', 'true'); fd.set('file', await globalThis.fMedia?.prepare(file)||file);
       fd.set('viewMode',$('#photo-mode')?.value||'once');fd.set('expectedPrice', price); fd.set('uploadToken', postUploadToken);
       const result = await api('upload-post', fd); charged = result.charged || 0;
-    } else await api('post', { body, category: category.id });
+    } else await api('post', { body, category: category?.id || null });
     form.reset(); postUploadToken = null; $('#upload-rights').hidden = true; $('#upload-price').hidden = true;
     $('#char-count').textContent = '0 / 280'; button.textContent = 'Beitrag posten ↗';
     filter = 'Alle'; sort = 'new'; $('#sort').value = 'new'; await refresh();
@@ -158,8 +159,9 @@ async function openChatPhoto(id) {
 }
 async function showWalletHistory() {
   if(!requireUser())return;
+  user=(await api('me')).user;if(!user)return;updateUser();
   const data=await api('wallet');
-  showModal(`<div class="modal-eyebrow">DEINE BELEIDIGUNGEN</div><h2 id="modal-title">${points(data.balance)} Beleidigungen</h2><p>Alle aktuellen Guthabenbestandteile: Tagespunkte, erhaltene Reaktionen, Kosten und Einnahmen. Reaktionsbuchungen zeigen den gegenwärtigen Stand einer Bewertung.</p>${data.entries.length?data.entries.map(e=>`<div class="transaction-row"><span class="transaction-icon">${e.amount>0?'↙':'↗'}</span><div class="transaction-copy"><strong>${esc(e.description)}</strong><small>${new Date(e.created).toLocaleString(globalThis.fLocale?.get()||'de')}</small></div><strong class="transaction-amount ${e.amount>0?'positive':''}">${e.amount>0?'+':''}${points(e.amount)} ✳</strong></div>`).join(''):'<div class="empty">Noch keine Buchungen.</div>'}`, 'wallet-history');
+  showModal(`<div class="modal-eyebrow">DEINE BELEIDIGUNGEN</div><h2 id="modal-title">${points(data.balance)} Beleidigungen</h2><button class="button dark full" data-action="daily" ${user.canClaim?'':'disabled'}>${user.canClaim?'Belohnungen abholen · 300 ✳':'Heute bereits 300 abgeholt ✓'}</button><p class="form-hint">Einmal täglich · Zeitzone Berlin.</p><h3>Verlauf</h3><p>Alle aktuellen Guthabenbestandteile: Tagespunkte, erhaltene Reaktionen, Kosten und Einnahmen. Reaktionsbuchungen zeigen den gegenwärtigen Stand einer Bewertung.</p>${data.entries.length?data.entries.map(e=>`<div class="transaction-row"><span class="transaction-icon">${e.amount>0?'↙':'↗'}</span><div class="transaction-copy"><strong>${esc(e.description)}</strong><small>${new Date(e.created).toLocaleString(globalThis.fLocale?.get()||'de')}</small></div><strong class="transaction-amount ${e.amount>0?'positive':''}">${e.amount>0?'+':''}${points(e.amount)} ✳</strong></div>`).join(''):'<div class="empty">Noch keine Buchungen.</div>'}`, 'wallet-history');
 }
 
 function updateChatSendPrice(){
@@ -185,7 +187,7 @@ async function loadChatMessages() {
   if (old === signature) return;
   const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 60;
   box.dataset.signature = signature;
-  box.innerHTML = data.messages.length ? data.messages.map(m => `<div class="message ${m.sender === user.id ? 'mine' : ''}">${m.mediaId ? ['ready', 'own'].includes(m.photoState) ? `<button class="chat-photo-button" data-action="view-chat-photo" data-id="${m.mediaId}">${m.photoState === 'own' ? 'Dein Foto ansehen · kostenlos' : 'Foto öffnen · einmal 20 Sek. · kostenlos'}</button>` : `<span class="expired-photo">${m.photoState === 'opened' ? 'Foto bereits geöffnet · nicht erneut verfügbar' : 'Foto abgelaufen'}</span>` : `<span class="message-body" data-user-content>${esc(m.body)}</span>`}<div class="message-meta"><time>${new Date(m.created).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}</time>${!m.mediaId ? '<button type="button" class="message-delete-button" data-action="delete-chat-text" data-id="'+m.id+'" data-own="'+(m.sender===user.id?'1':'0')+'">'+(globalThis.fMessageDelete?.label()||'Löschen')+'</button>' : ''}<button data-action="report" data-type="message" data-id="${m.id}" aria-label="Diese Nachricht melden">Melden</button></div></div>`).join('') : '<div class="empty">Euer Chat ist freigegeben.<br>Schreib etwas oder lade zu einem Spiel ein.</div>';
+  box.innerHTML = data.messages.length ? data.messages.map(m => `<div class="message ${m.sender === user.id ? 'mine' : ''}">${m.mediaId ? ['ready', 'own'].includes(m.photoState) ? `<button class="chat-photo-button" data-action="view-chat-photo" data-id="${m.mediaId}">${m.photoState === 'own' ? 'Dein Foto ansehen · kostenlos' : 'Foto öffnen · einmal 20 Sek. · kostenlos'}</button>` : `<span class="expired-photo">${m.photoState === 'opened' ? 'Foto bereits geöffnet · nicht erneut verfügbar' : 'Foto abgelaufen'}</span>` : `<span class="message-body" data-user-content>${esc(m.body)}</span>`}<div class="message-meta"><time>${new Date(m.created).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}</time><details class="message-options"><summary aria-label="Nachrichtenoptionen">···</summary><div class="message-options-list">${!m.mediaId ? '<button type="button" class="message-delete-button" data-action="delete-chat-text" data-id="'+m.id+'" data-own="'+(m.sender===user.id?'1':'0')+'">'+(globalThis.fMessageDelete?.label()||'Löschen')+'</button>' : ''}<button data-action="report" data-type="message" data-id="${m.id}" aria-label="Diese Nachricht melden">Melden</button></div></details></div></div>`).join('') : '<div class="empty">Euer Chat ist freigegeben.<br>Schreib etwas oder lade zu einem Spiel ein.</div>';
   if (atBottom) box.scrollTop = box.scrollHeight;
 }
 
@@ -249,10 +251,10 @@ async function loadChatGames(expand = false) {
   const container = $('#chat-games'); if (!container) return;
   if (expand) gamesVisible = !gamesVisible;
   const active = data.games.filter(g => ['invited', 'active'].includes(g.status));
-  const button = $('#games-toggle'); if (button) { button.textContent = active.length ? `Spiele · ${active.length} offen` : 'Spiele · Einladung 5 ✳'; button.setAttribute('aria-expanded', String(gamesVisible || !!active.length)); }
-  container.hidden = !gamesVisible && !active.length;
+  const button = $('#games-toggle'); if (button) { button.textContent = gamesVisible ? 'Spiele schließen' : active.length ? `Spiele öffnen · ${active.length} offen` : 'Spiele öffnen · Einladung 5 ✳'; button.setAttribute('aria-expanded', String(gamesVisible)); }
+  container.hidden = !gamesVisible;
   const shown = gamesForDisplay(data.games);
-  if(shown.some(g=>g.status==='finished')) { container.hidden=false; button?.setAttribute('aria-expanded','true'); }
+  // Collapsing only hides the board; server game state is unchanged.
   const signature = JSON.stringify([data.games.map(g => g.type === 'dino-run' && g.status === 'active' ? {id:g.id,version:g.version,status:g.status} : g), gamesVisible]);
   if (container.dataset.version === signature) return; container.dataset.version = signature;
   const nameOf = id => id === user.id ? 'Du' : chatPerson.name;

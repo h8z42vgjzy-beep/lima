@@ -38,7 +38,7 @@ try {
     await page.screenshot({path:path.join(root,'qa-results',`${name}-${width}-games.png`)});
     await page.click('#modal .modal-close');await page.evaluate(async request=>{const d=await api('people'),r=d.requests.find(r=>r.id===request);await openChat(r.id,{id:r.sender===user.id?r.receiver:r.sender,name:r.name,color:r.color});},request);
     await page.waitForSelector('#message-input');await page.fill('#message-input','Nur für mich und für beide löschen testen.');await page.click('#message-form button[type=submit]');
-    await page.waitForSelector('.message.mine .message-delete-button');await page.click('.message.mine .message-delete-button');
+    await page.waitForSelector('.message.mine .message-delete-button');await page.locator('.message.mine .message-options summary').last().click();await page.locator('.message.mine .message-delete-button').last().click();
     assert.ok(await page.locator('text=Nur für mich').count());
     await page.keyboard.press('Escape');
     await page.screenshot({path:path.join(root,'qa-results',`${name}-${width}-chat.png`)});

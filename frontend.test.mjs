@@ -16,9 +16,11 @@ test('UI logic: no preselected category, choice preserved until submission, pric
   const h=ui();await h.ready;
   h.run("categories=[{id:1,name:'Alltag',photo_price:5},{id:2,name:'Kunst',photo_price:7}];updateCategories();");
   assert.equal(h.element('#post-category').value,'');
-  assert.match(h.element('#post-category').innerHTML,/value="" disabled/);
+  assert.match(h.element('#post-category').innerHTML,/value="">Ohne Kategorie/);
   h.element('#post-category').value='2';h.run('updateCategories()');assert.equal(h.element('#post-category').value,'2');
+  assert.equal(h.element('#post-category').required,false);
   h.element('#post-file').files=[{name:'test.png'}];h.run('user={id:1,balance:300};updateUploadPrice()');
+  assert.equal(h.element('#post-category').required,true);
   assert.match(h.element('#upload-price').textContent,/hochladen: 7 Beleidigungen/);assert.match(h.element('#upload-price').textContent,/3,5/);
   h.element('#post-category').value='';h.run('updateUploadPrice()');assert.match(h.element('#upload-price').textContent,/Wähle eine Kategorie/);
 });
@@ -34,9 +36,9 @@ test('UI logic: unlocked and owned photos render images, never a second buy butt
   const attack=h.run(`renderPostMedia({name:'<script>bad</script>',media:{id:3,kind:'image',unlocked:true}})`);assert.doesNotMatch(attack,/<script>/);
 });
 
-test('UI wiring: mandatory category, media helpers load before app, games and extras reachable',()=>{
+test('UI wiring: optional text category, media helpers load before app, games and extras reachable',()=>{
   const html=readFileSync(new URL('public/index.html',import.meta.url),'utf8');
-  assert.match(html,/<select id="post-category"[^>]*required/);
+  assert.doesNotMatch(html,/<select id="post-category"[^>]*required/);
   assert.ok(html.indexOf('src="/features.js"')<html.indexOf('src="/app.js"'));
   assert.match(html,/data-action="games"/);assert.match(html,/data-action="extras"/);
   assert.match(html,/Langzeit-Schach/);
@@ -66,8 +68,11 @@ test('Chess result remains visible after finishing and alongside another active 
  const h=ui();await h.ready;
  h.run(`user={id:1};chatId=5;modalView='chat';chatPerson={name:'Test'};
  api=async()=>({catalog:[],games:[{id:8,type:'chess',creator:1,opponent:2,status:'finished',winner:1,version:5,state:{board:Array(64).fill(null)}}]});`);
- await h.run('loadChatGames()');
+ await h.run('loadChatGames(true)');
  assert.equal(h.element('#chat-games').hidden,false);
+ await h.run('loadChatGames(true)');assert.equal(h.element('#chat-games').hidden,true);
+ await h.run('loadChatGames()');assert.equal(h.element('#chat-games').hidden,true);
+ await h.run('loadChatGames(true)');assert.equal(h.element('#chat-games').hidden,false);
  assert.match(h.element('#chat-games').innerHTML,/Du hast gewonnen/);
  assert.match(h.element('#chat-games').innerHTML,/data-chess-board="8"/);
  assert.equal(h.run(`gamesForDisplay([{id:10,type:'dino-run',status:'active'},{id:8,type:'chess',status:'finished'}]).length`),2);

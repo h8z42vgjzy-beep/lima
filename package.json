@@ -1,13 +1,13 @@
 {
   "name": "feindschaft",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "private": true,
   "type": "module",
   "scripts": {
     "start": "node server.mjs",
     "dev": "node server.mjs",
     "check": "node scripts/check.mjs",
-    "test": "node --test --test-concurrency=1 tests.mjs regression.test.mjs games.test.mjs chess.test.mjs frontend.test.mjs music.test.mjs dino.test.mjs effects.test.mjs reset.test.mjs reset-audio.test.mjs pwa.test.mjs activity.test.mjs v10.test.mjs chat-repair.test.mjs message-delete.test.mjs v11.test.mjs",
+    "test": "node --test --test-concurrency=1 tests.mjs regression.test.mjs games.test.mjs chess.test.mjs frontend.test.mjs music.test.mjs dino.test.mjs effects.test.mjs reset.test.mjs reset-audio.test.mjs pwa.test.mjs activity.test.mjs v10.test.mjs chat-repair.test.mjs message-delete.test.mjs v11.test.mjs v12.test.mjs",
     "test:browser": "node scripts/browser-qa.mjs"
   },
   "engines": {

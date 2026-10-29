@@ -1,3 +1,7 @@
+# V12 – Nachtrag
+
+Die aktuellen Korrekturen und die geänderte Feed-Speicherregel stehen in README.md. Frühere Aussagen zur 28-Tage-Frist gelten ab V12 nur noch für Chat-Fotos, nicht für den Feed.
+
 # Umsetzung der Word-Vorlage
 
 Maßgeblich ist der Abschnitt **„Feindschaft (F) – Was wir wirklich umsetzen“** in der hochgeladenen Word-Datei vom 29. Oktober 2026. Die 13 eingebetteten Bilder wurden als Gestaltungsreferenzen geprüft. Ihre erfundenen Inhalte, Konten und zusätzlichen Schaltflächen werden nicht als bereits vorhandene Produktfunktionen ausgegeben.

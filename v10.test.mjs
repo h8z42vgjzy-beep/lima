@@ -71,11 +71,11 @@ test('Timed feed photos: separate viewers, no unprotected image, 20-second expir
  assert.equal((await h.call('wallet',reporter)).data.balance,280);
  assert.equal((await h.call('wallet',owner)).data.balance,20);
 });
-test('Permanent photos survive storage reset; default category prices are tenfold',async t=>{
+test('Below capacity all photos remain; default category prices are tenfold',async t=>{
  const h=await app(t);const permanent=h.media(40000);h.run("UPDATE media SET view_mode='permanent',expires=8640000000000000 WHERE id=?",permanent.id);h.run('UPDATE posts SET expires=NULL WHERE id=?',permanent.pid);
  const disposable=h.media(44900);
  const category=(await h.call('categories')).data.categories.find(c=>c.name==='Alltag');assert.equal(category.photo_price,h.one('SELECT photo_price FROM categories WHERE id=?',category.id).photo_price*10);
  await h.upload(200);
  assert.equal(h.one('SELECT removed FROM media WHERE id=?',permanent.id).removed,0);assert.equal(h.one('SELECT deleted FROM posts WHERE id=?',permanent.pid).deleted,0);
- assert.equal(h.one('SELECT removed FROM media WHERE id=?',disposable.id).removed,1);
+ assert.equal(h.one('SELECT removed FROM media WHERE id=?',disposable.id).removed,0);
 });

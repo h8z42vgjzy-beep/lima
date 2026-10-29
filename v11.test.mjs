@@ -13,7 +13,7 @@ import {achievementCatalog} from './studio.mjs';
 const read=name=>readFileSync(new URL('public/'+name,import.meta.url),'utf8');
 
 test('Release starts with all selected features and no location routes',async t=>{
- const h=await app(t),status=await h.anon.call('design-status');assert.equal(status.status,200);assert.equal(status.data.version,'feindschaft-11');assert.equal(status.data.location,false);
+ const h=await app(t),status=await h.anon.call('design-status');assert.equal(status.status,200);assert.equal(status.data.version,'feindschaft-12');assert.equal(status.data.location,false);
  assert.deepEqual(status.data.themes,['night','pride','forest','ice']);
  assert.equal((await h.anon.call('studio/overview')).status,401);
  assert.equal((await h.alice.call('nearby')).status,404);assert.equal((await h.alice.raw('/nearby-client.js')).status,404);
@@ -97,9 +97,9 @@ test('Wallet history includes daily grants, reaction values and expenses without
  const a=await alice.call('wallet'),b=await alice.call('wallet');assert.equal(a.data.balance,302);assert.equal(b.data.balance,302);assert.deepEqual(a.data.entries.map(e=>e.origin).sort(),['daily','reaction']);
  await bob.call('react',{kind:'post',target:p.data.id,value:-1});assert.equal((await alice.call('wallet')).data.balance,295);assert.equal((await alice.call('wallet')).data.entries.find(e=>e.origin==='reaction').amount,-5);
 });
-test('All new feed posts use the documented 28 days; permanent photos have no automatic expiry',async t=>{
- const h=await app(t),{alice}=h;const text=await alice.call('post',{body:'Ein Beitrag für vier Wochen.',category:'Alltag'});const p=h.one('SELECT * FROM posts WHERE id=?',text.data.id);assert.ok(Math.abs(p.expires-p.created-28*86400000)<20);
- const once=await alice.upload('upload-post',{viewMode:'once'});assert.equal(once.status,201);const timed=h.one('SELECT * FROM posts WHERE id=?',once.data.id);assert.ok(Math.abs(timed.expires-timed.created-28*86400000)<20);
+test('Feed text and photos have no age expiry; private chat retains its independent policy',async t=>{
+ const h=await app(t),{alice}=h;const text=await alice.call('post',{body:'Ein Beitrag für vier Wochen.',category:'Alltag'});const p=h.one('SELECT * FROM posts WHERE id=?',text.data.id);assert.equal(p.expires,null);
+ const once=await alice.upload('upload-post',{viewMode:'once'});assert.equal(once.status,201);const timed=h.one('SELECT * FROM posts WHERE id=?',once.data.id);assert.equal(timed.expires,null);
  const permanent=await alice.upload();assert.equal(h.one('SELECT expires FROM posts WHERE id=?',permanent.data.id).expires,null);
 });
 test('All application assets and image worlds are served with CSP, conditional ETags and compression',async t=>{
@@ -156,7 +156,7 @@ test('A real legacy database migrates without losing account IDs, sessions, bala
  }});
  const old=h.client();old.cookie='f_session='+token;assert.equal((await old.call('me')).data.user.id,6);assert.equal((await old.call('me')).data.user.name,'lima');assert.equal((await old.call('wallet')).data.balance,300);
  const request=(await old.call('people')).data.requests.find(r=>r.id===6);assert.equal(request.status,'pending');assert.equal(request.receiver,13);
- const p=h.one('SELECT * FROM posts WHERE id=1');assert.equal(p.expires-p.created,28*86400000);assert.equal(p.deleted,0);
+ const p=h.one('SELECT * FROM posts WHERE id=1');assert.equal(p.expires,null);assert.equal(p.deleted,0);
  assert.equal(h.one('SELECT body FROM messages WHERE id=1').body,'Bestehender Nachrichtenverlauf');assert.equal((await old.call('request',{target:13,expectedCost:200})).data.charged,0);assert.equal((await old.call('wallet')).data.balance,300);
  assert.equal((await old.call('messages?request=6')).status,403);assert.equal(h.one('SELECT COUNT(*) AS n FROM studio_schema WHERE version=11').n,1);
 });

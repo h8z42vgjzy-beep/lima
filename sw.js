@@ -1,6 +1,6 @@
 /* Cache application assets, never account data, private media or API responses. */
 'use strict';
-const CACHE='feindschaft-offline-v11';
+const CACHE='feindschaft-offline-v12';
 const FILES=['/offline.html','/offline.js','/pwa.css','/design-system.css','/theme-boot.js','/app-icon-192.png','/app-icon-512.png','/app-icon-maskable.png','/apple-touch-icon.png'];
 const VISITED=new Set([...FILES,'/style.css','/night.css','/features.css','/action.css','/activity.css','/moderation-notices.css','/message-delete.css','/app.js','/features.js','/studio.js','/media-client.js','/translations.js','/studio-translations.js','/i18n.js','/music-player.js','/dino-client.js','/discovery-effects.js','/pwa.js','/activity-ui.js','/moderation-notices.js','/message-delete-client.js','/reset-live.js','/reset-animation.js','/reset-animation.css','/reset-audio.js','/art/night.webp','/art/pride.webp','/art/forest.webp','/art/ice.webp','/art/night.svg','/art/pride.svg','/art/forest.svg','/art/ice.svg','/art/dino.svg','/art/chess.svg','/art/arcade.svg','/manifest.webmanifest']);
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(FILES))));

@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="f-release" content="11">
+  <meta name="f-release" content="12">
   <meta name="theme-color" content="#090611"><meta name="robots" content="noindex,nofollow">
   <meta name="description" content="F steht für Feindschaft. Teile freche Sprüche, verteile Blumen und finde Menschen mit deinem Humor.">
   <link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/apple-touch-icon.png">
@@ -29,11 +29,11 @@
       <button data-studio="games"><span data-icon="game"></span>Spiele</button>
       <button data-action="music"><span data-icon="music"></span>Musik</button>
       <button data-action="categories"><span data-icon="layers"></span>Kategorien</button>
-      <button data-action="extras"><span data-icon="spark"></span>Extras</button>
+      <button data-action="extras"><span data-icon="spark"></span>Lernarchiv & Extras</button>
       <button data-studio="leaderboard"><span data-icon="trophy"></span>Ranglisten</button>
     </nav>
     <button class="button dark rail-compose" data-action="compose"><span data-icon="plus"></span>Dein nächster Konter</button>
-    <div class="rail-bottom"><button data-studio="achievements"><span data-icon="award"></span>Auszeichnungen</button><button data-studio="discover"><span data-icon="compass"></span>Entdeckungen</button><button data-studio="settings"><span data-icon="settings"></span>Einstellungen</button><button data-studio="feedback"><span data-icon="message"></span>Deine Idee zählt</button><div class="rail-theme"><span class="theme-dot"></span><span data-theme-name>Nachtblüte</span><small>F · V11</small></div></div>
+    <div class="rail-bottom"><button data-studio="achievements"><span data-icon="award"></span>Auszeichnungen</button><button data-studio="discover"><span data-icon="compass"></span>Entdeckungen</button><button data-studio="settings"><span data-icon="settings"></span>Einstellungen</button><button data-studio="feedback"><span data-icon="message"></span>Deine Idee zählt</button><div class="rail-theme"><span class="theme-dot"></span><span data-theme-name>Nachtblüte</span><small>F · V12</small></div></div>
   </aside>
   <header class="header"><div class="header-inner">
     <a href="#feed" class="brand" aria-label="F Feindschaft Startseite"><span class="app-logo">f<span>✳</span></span><span class="brand-name">Feindschaft<small>Frech. Charmant. Fair.</small></span></a>
@@ -51,7 +51,7 @@
     <section class="community" id="feed" aria-labelledby="feed-title">
       <div class="section-heading"><div><div class="eyebrow muted">DEINE TÄGLICHE DOSIS WORTWITZ</div><h2 id="feed-title">Dein Feed<span>✳</span></h2></div><button class="feed-view-toggle" data-action="compose"><span data-icon="plus"></span>Beitrag erstellen</button></div>
       <div class="mobile-shortcuts"><a href="#wallet">✳ Tagespunkte abholen</a><a href="#trending">↗ Im Gespräch</a></div><div class="feed-layout"><div class="feed-column">
-        <form id="post-form" class="composer"><div class="composer-top"><span class="avatar lavender" id="composer-avatar">f.</span><label class="sr-only" for="post-body">Dein Spruch</label><textarea id="post-body" maxlength="280" placeholder="Na, heute schon jemanden charmant beleidigt?" rows="2"></textarea></div><div class="composer-bottom"><div class="composer-options"><select id="post-category" aria-label="Kategorie" required><option value="">Bitte Kategorie auswählen …</option></select><label class="upload-label">Datei <input id="post-file" type="file" accept="image/jpeg,image/png,image/webp,audio/mpeg,audio/mp4,audio/ogg,audio/wav,video/mp4,video/webm"></label><span id="char-count">0 / 280</span></div><button class="button dark small" type="submit">Spruch posten <span>↗</span></button></div><label class="consent upload-rights" hidden id="upload-rights"><input type="checkbox" name="rights"><span>Ich habe die Rechte an dieser Datei.</span></label><p id="upload-price" class="upload-price" hidden aria-live="polite"></p></form>
+        <form id="post-form" class="composer"><div class="composer-top"><span class="avatar lavender" id="composer-avatar">f.</span><label class="sr-only" for="post-body">Dein Spruch</label><textarea id="post-body" maxlength="280" placeholder="Na, heute schon jemanden charmant beleidigt?" rows="2"></textarea></div><div class="composer-bottom"><div class="composer-options"><select id="post-category" aria-label="Kategorie (für Fotos erforderlich)"><option value="">Bitte Kategorie auswählen …</option></select><label class="upload-label">Datei <input id="post-file" type="file" accept="image/jpeg,image/png,image/webp,audio/mpeg,audio/mp4,audio/ogg,audio/wav,video/mp4,video/webm"></label><span id="char-count">0 / 280</span></div><button class="button dark small" type="submit">Spruch posten <span>↗</span></button></div><label class="consent upload-rights" hidden id="upload-rights"><input type="checkbox" name="rights"><span>Ich habe die Rechte an dieser Datei.</span></label><p id="upload-price" class="upload-price" hidden aria-live="polite"></p></form>
         <div class="feed-controls"><div class="filter-tabs" role="group" aria-label="Feed filtern"><button class="selected" data-filter="Alle">Für dich</button><button data-filter="Alltag">Alltag</button><button data-filter="Schule & Uni">Schule &amp; Uni</button><button data-filter="Internet">Internet</button><button data-filter="Clips">Clips</button><button data-filter="Musik">Musik</button></div><label class="sort"><span class="sr-only">Sortierung</span><select id="sort"><option value="new">Neueste</option><option value="top">Die besten</option></select></label></div>
         <p class="sample-note" id="sample-note">Zum Warmwerden: Beispielprofile und Beispiel-Blumen. Dein Spruch macht den Anfang.</p>
         <div id="posts" aria-live="polite" aria-busy="true"><div class="skeleton-card" aria-label="Beiträge werden geladen"><div class="skeleton skeleton-avatar"></div><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-image"></div><div class="skeleton skeleton-line short"></div></div><div class="skeleton-card" aria-hidden="true"><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-image"></div></div></div>

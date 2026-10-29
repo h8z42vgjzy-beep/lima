@@ -2,6 +2,7 @@
 (()=>{'use strict';let language=['de','en','ru','uk'].includes(document.documentElement.lang)?document.documentElement.lang:'de',scheduled=false;const original=new WeakMap(),attributes=new WeakMap();
 const skip='script,style,textarea,code,pre,.post-body,.extra-text,.extra-entry>h3,.comment-card>p,.message-body,.message time,.author-button,.account-name,.chat-heading h2,.dock-track,.audio-info>strong,.audio-info>span,.photo-watermark,.moderation-notice>p,.activity-notice>strong,.profile-name,[data-user-content]';
 const patterns=[
+ [/^Spiele öffnen · (\d+) offen$/,['Open games · {1} active','Открыть игры · активно {1}','Відкрити ігри · активних {1}']],
  [/^AUSZEICHNUNGEN · (\d+) \/ 7$/,['ACHIEVEMENTS · {1} / 7','ДОСТИЖЕНИЯ · {1} / 7','ДОСЯГНЕННЯ · {1} / 7']],
  [/^Deine Rückmeldung #(\d+) ist gespeichert\. Du findest ihren Status im Feedback-Bereich\.$/,['Your feedback #{1} is saved. Find its status in Feedback.','Отзыв #{1} сохранён. Его статус доступен в разделе отзывов.','Відгук #{1} збережено. Його статус доступний у розділі відгуків.']],
  [/^AUSZEICHNUNG FREIGESCHALTET(.*)$/,['ACHIEVEMENT UNLOCKED{1}','ДОСТИЖЕНИЕ ОТКРЫТО{1}','ДОСЯГНЕННЯ ВІДКРИТО{1}']],

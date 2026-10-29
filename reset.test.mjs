@@ -32,9 +32,9 @@ async function app(t){
  return {dir,base,db,run,one,all,owner,reporter,third,admin,post,media,report,call,upload,stream,errors:()=>errors};
 }
 
-test('84.9% stays intact; exactly 85% clears test media/feed, preserves all reported evidence and persistent chat/games/documents',async t=>{
+test('99.9% stays intact; capacity clears old feed, preserves latest 100 and evidence, chat, games and documents',async t=>{
  const h=await app(t),{run,one,all,media,post,report,owner,reporter,third}=h;
- const picture=media(79800),video=media(300,{kind:'video'}),music=media(300,{kind:'audio'});
+ const picture=media(94800),video=media(300,{kind:'video'}),music=media(300,{kind:'audio'});
  const evidence=media(300);report('post',evidence.pid);
  const direct=media(300);report('media',direct.id);
  const commented=media(300);const comment=Number(run('INSERT INTO comments(user_id,post_id,body,created) VALUES(?,?,?,?)',owner.id,commented.pid,'Testkommentar',Date.now()).lastInsertRowid);report('comment',comment);
@@ -56,19 +56,22 @@ test('84.9% stays intact; exactly 85% clears test media/feed, preserves all repo
  // 82,500 media bytes + 1,900 permanent document bytes = 84,400.
  const docFile=path.join(h.dir,'documents','permanent.txt');writeFileSync(docFile,'x'.repeat(1900));
  run('INSERT INTO documents(post_id,file_name,original_name,mime,bytes) VALUES(?,?,?,?,?)',permanent,'permanent.txt','test.txt','text/plain',1900);
- const used=one('SELECT SUM(bytes) AS n FROM media WHERE removed=0').n+1900;assert.equal(used,84400);
+ const used=one('SELECT SUM(bytes) AS n FROM media WHERE removed=0').n+1900;assert.equal(used,99400);
+ const latest=Array.from({length:100},()=>post());
  const a=await h.stream(),b=await h.stream(),offline=await h.stream();offline.close();await offline.task;
  assert.equal(one('SELECT COUNT(*) AS n FROM reset_events').n,0);
  assert.equal(existsSync(picture.file),true);
  assert.equal((await h.upload(500)).status,201);
- assert.equal(one('SELECT SUM(bytes) AS n FROM media WHERE removed=0').n+1900,84900);
+ assert.equal(one('SELECT SUM(bytes) AS n FROM media WHERE removed=0').n+1900,99900);
  assert.equal(one('SELECT COUNT(*) AS n FROM reset_events').n,0);
  assert.equal(existsSync(picture.file),true);
  const result=await h.upload(100);assert.equal(result.status,201,JSON.stringify(result));
+ const newest=all("SELECT id,deleted FROM posts WHERE space='feed' ORDER BY created DESC,id DESC LIMIT 100");assert.equal(newest.length,100);assert.ok(newest.every(p=>p.deleted===0));
+ assert.equal(one('SELECT deleted FROM posts WHERE id=?',latest[0]).deleted,1);assert.equal(one('SELECT deleted FROM posts WHERE id=?',latest[1]).deleted,1);
  const [ae,be]=await Promise.all([a.wait('feed-reset'),b.wait('feed-reset')]);assert.deepEqual(ae,be);assert.equal(ae.startAt-ae.created,3000);assert.equal(ae.ends-ae.startAt,136000);
- for(const item of [picture,video,music,ordinaryChat,unrelatedChat]){assert.equal(existsSync(item.file),false);assert.equal(one('SELECT removed FROM media WHERE id=?',item.id).removed,1);}
- for(const item of [evidence,direct,commented,protectedChat,reportedMessage]){assert.equal(existsSync(item.file),true);assert.equal(one('SELECT removed FROM media WHERE id=?',item.id).removed,0);}
- for(const pid of [evidence.pid,direct.pid,commented.pid,reportedUserPost,permanent])assert.equal(one('SELECT deleted FROM posts WHERE id=?',pid).deleted,0);
+ for(const item of [picture,video,music]){assert.equal(existsSync(item.file),false);assert.equal(one('SELECT removed FROM media WHERE id=?',item.id).removed,1);}
+ for(const item of [evidence,direct,commented,protectedChat,reportedMessage,ordinaryChat,unrelatedChat]){assert.equal(existsSync(item.file),true);assert.equal(one('SELECT removed FROM media WHERE id=?',item.id).removed,0);}
+ for(const pid of [evidence.pid,direct.pid,commented.pid,reportedUserPost,permanent,...latest.slice(2)])assert.equal(one('SELECT deleted FROM posts WHERE id=?',pid).deleted,0);
  assert.equal(existsSync(docFile),true);assert.equal(one('SELECT COUNT(*) AS n FROM categories').n,categoryBefore);
  assert.equal(one("SELECT COUNT(*) AS n FROM messages WHERE body='Dauerhafter Testtext'").n,1);
  assert.equal((await h.call('feed')).data.posts.some(p=>p.id===picture.pid),false);

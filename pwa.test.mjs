@@ -12,7 +12,7 @@ test('Installable manifest has existing PNG icons, root scope and standalone dis
 });
 test('Offline worker caches public fallback and app assets; bypasses API, stream and private media',async()=>{
  const handlers={},saved=[],deleted=[];
- const offline={offline:true},caches={open:async()=>({addAll:async urls=>saved.push(...urls)}),keys:async()=>['unrelated-cache','feindschaft-offline-old','feindschaft-offline-v11'],delete:async key=>deleted.push(key),match:async()=>offline};
+ const offline={offline:true},caches={open:async()=>({addAll:async urls=>saved.push(...urls)}),keys:async()=>['unrelated-cache','feindschaft-offline-old','feindschaft-offline-v12'],delete:async key=>deleted.push(key),match:async()=>offline};
  const self={location:{origin:'https://example.test'},clients:{claim:async()=>{}},addEventListener:(name,fn)=>handlers[name]=fn};
  vm.runInNewContext(read('sw.js').toString(),{self,caches,URL,fetch:async()=>{throw Error('offline');}});
  let pending;handlers.install({waitUntil:p=>pending=p});await pending;

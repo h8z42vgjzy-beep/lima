@@ -1,10 +1,12 @@
-# Prüfung von Feindschaft V11
+# Prüfung von Feindschaft V12
 
 Stand: 29. Oktober 2026. Lokale Laufzeit: Node.js 24.22.1. Alle Daten in automatisierten Tests stammen aus eigens angelegten Testkonten und werden nach dem Test entfernt.
 
 ## Tatsächlich ausgeführt
 
-Die Syntaxprüfung umfasst die JavaScript-Dateien des Pakets. Die vollständige Testsuite besteht aus **84 bestandenen Tests**, ohne übersprungene oder fehlgeschlagene Tests.
+Zusätzliche V12-Prüfungen: Text ohne Kategorie, Pflichtkategorie für Foto-Uploads, normale und flache Bildpfade mit Byte-Vergleich, Rekordkarten-Fallback bei fehlendem Hintergrund, erreichbare Moderations-/Archiv-Verknüpfungen, auf- und zuklappbare Spielansicht sowie Reset bei 100 % statt 85 % mit Schutz der neuesten 100 Feed-Beiträge. Die UI-Logik wird isoliert geprüft; dies ist keine visuelle Browser-Abnahme.
+
+Die Syntaxprüfung umfasst die JavaScript-Dateien des Pakets. Die vollständige Testsuite besteht aus **88 bestandenen Tests**, ohne übersprungene oder fehlgeschlagene Tests.
 
 Geprüft sind insbesondere:
 
@@ -12,7 +14,7 @@ Geprüft sind insbesondere:
 - Chat-Annahme, wiederholte Anfragen ohne erneute Abbuchung, Blockieren und Entblockieren mit erhaltenem Verlauf.
 - Explizite Preise, unveränderte Guthaben beim Lesen, wiederholte Sendeversuche, keine doppelten Abbuchungen und die 50-Prozent-Beteiligung an Fotos.
 - Pflichtkategorien, Rechte für Kategorienänderungen, Verfügbarkeit von Bilddateien vor einer Abbuchung und unveränderte Preise bereits veröffentlichter Fotos.
-- Getrennte Foto-Zeitfenster, serverseitige 20-Sekunden-Grenzen, dauerhafte Fotos und 28-Tage-Fristen.
+- Getrennte Foto-Zeitfenster, serverseitige 20-Sekunden-Grenzen, unbefristete Feed-Aufbewahrung und separate 28-Tage-Fristen für Chat-Fotos.
 - Nachrichten nur für das eigene Konto oder durch die sendende Person für beide löschen; bereits gemeldete Texte nur für berechtigte Moderation aufbewahren.
 - Musikoptimierung und exakte Byte-Bereiche für unterbrechungsfreie Wiedergabe und Springen in der Datei.
 - Schachregeln, Ausgangsstellung, Zugrechte, Rochade, en passant, Umwandlung, Schachmatt und Patt.
@@ -44,7 +46,7 @@ Für LCP unter 2,5 Sekunden, INP unter 200 Millisekunden und CLS unter 0,1 gibt 
 
 ## Abnahme nach deinem Deployment
 
-1. `/api/design-status` muss `active: true` und `version: "feindschaft-11"` melden.
+1. Nach dem Update Moderation und Lernarchiv direkt im Feed und Profil öffnen; Guthaben → 300 abholen; Text ohne Kategorie posten; Chatspiel wiederholt schließen und öffnen; Rekordkarte speichern. `/api/design-status` muss `active: true` und `version: "feindschaft-12"` melden.
 2. Mit zwei Testkonten einen Chat anfragen, annehmen, schreiben, blockieren und entblockieren. Die wartende Anfrage muss auf der empfangenden Seite sichtbar sein.
 3. Eine empfangene Nachricht nur für sich löschen; eine eigene nur für sich und eine weitere für beide löschen. Das jeweils andere Konto kontrollieren. Eine Meldung vor dem Löschen anlegen und als Admin prüfen.
 4. Ein Foto in einer kostenpflichtigen Kategorie einstellen. Guthaben vorher und nachher sowie die 50-Prozent-Gutschrift kontrollieren. Ein 20-Sekunden-Foto jeweils mit getrennten Konten öffnen.
