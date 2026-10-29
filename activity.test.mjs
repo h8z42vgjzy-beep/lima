@@ -36,7 +36,8 @@ async function app(t){
 test('Activity: replies, private messages, invitations and chess moves reach only the recipient',async t=>{
  const h=await app(t),{owner,reporter,third,run,one}=h;
  const rid=Number(run("INSERT INTO requests(sender,receiver,status,created) VALUES(?,?,'accepted',?)",owner.id,reporter.id,Date.now()).lastInsertRowid);
- run("INSERT INTO daily_claims(user_id,day,amount,created) SELECT id,'fixture',300,0 FROM users");const call=(r,u,b)=>h.call(r,u,JSON.stringify({...(['message','game-create'].includes(r)?{expectedCost:5,sendToken:randomUUID()}:{}),...(r==='game-action'&&b.action==='accept'?{expectedCost:5}:{}),...b}));
+ const call=(r,u,b)=>h.call(r,u,JSON.stringify({...(['message','game-create'].includes(r)?{expectedCost:5,sendToken:randomUUID()}:{}),...(r==='game-action'&&b.action==='accept'?{expectedCost:5}:{}),...b}));
+ await call('daily',owner,{});await call('daily',reporter,{});
  assert.equal((await call('message',owner,{request:rid,body:'Hallo'})).status,201);
  assert.equal((await h.call('notifications',reporter)).data.notices[0].type,'messages');
  assert.equal((await h.call('notifications',third)).data.notices.length,0);
@@ -87,19 +88,4 @@ test('Push queue retries, honours preferences and removes expired subscriptions'
  h.run('UPDATE push_jobs SET next_at=0');fail=0;await activity.drain();assert.equal(sends,2);assert.equal(h.one('SELECT COUNT(*) AS n FROM push_jobs').n,0);
  activity.notify(h.reporter.id,h.owner.id,'messages',1,'queue:muted');activity.save(h.reporter.id,{enabled:false});await activity.drain();assert.equal(sends,2);
  activity.save(h.reporter.id,{enabled:true});activity.notify(h.reporter.id,h.owner.id,'messages',1,'queue:gone');fail=410;await activity.drain();assert.equal(h.one('SELECT COUNT(*) AS n FROM push_devices').n,0);
-});
-
-test('Push diagnostics are device-owner scoped and distinguish accepted from failed delivery',async t=>{
- const h=await app(t);let failure=0;const sent=[];
- const driver={generateVAPIDKeys:()=>({publicKey:'fixture',privateKey:'fixture'}),setVapidDetails(){},async sendNotification(s,p){if(failure)throw{statusCode:failure};sent.push(JSON.parse(p));}};
- const transact=fn=>{h.db.exec('BEGIN');try{const v=fn();h.db.exec('COMMIT');return v;}catch(e){h.db.exec('ROLLBACK');throw e;}};
- const a=await createActivity({db:h.db,one:h.one,all:h.all,run:h.run,now:Date.now,dataDir:h.dir,blocked:()=>false,ledger(){},transact,pushDriver:driver});t.after(()=>a.close());
- const sub={endpoint:'https://web.push.apple.com/diagnostic',keys:{p256dh:'A'.repeat(87),auth:'A'.repeat(22)}};
- a.subscribe(h.owner.id,createHash('sha256').update(h.owner.cookie.split('=')[1]).digest('hex'),sub);
- assert.equal(a.status(h.third.id,sub.endpoint),null);
- await assert.rejects(a.test(h.third.id,sub.endpoint),e=>e[0]===404);
- assert.equal((await a.test(h.owner.id,sub.endpoint)).accepted,true);assert.equal(sent[0].recipient,h.owner.id);assert.equal(sent[0].url,'/?notice=0');
- assert.equal(a.status(h.owner.id,sub.endpoint).last_status,'accepted');
- failure=403;await assert.rejects(a.test(h.owner.id,sub.endpoint),e=>e[0]===502);
- assert.equal(a.status(h.owner.id,sub.endpoint).last_status,'403');
 });

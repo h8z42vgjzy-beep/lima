@@ -9,7 +9,7 @@ function ui(){
   const context=vm.createContext({document:{querySelector:element,querySelectorAll:()=>[],addEventListener(){}},setInterval:()=>0,clearInterval(){},setTimeout:()=>0,clearTimeout(){},console,FormData,URL,Image:class{},HTMLImageElement:class{},fetch:async()=>({ok:true,json:async()=>({user:null,posts:[],categories:[],members:0})})});
   vm.runInContext(readFileSync(new URL('public/features.js',import.meta.url),'utf8'),context);
   const ready=vm.runInContext(readFileSync(new URL('public/app.js',import.meta.url),'utf8'),context);
-  return {context,element,ready:context.fAppReady||ready,run:code=>vm.runInContext(code,context)};
+  return {context,element,ready,run:code=>vm.runInContext(code,context)};
 }
 
 test('UI logic: no preselected category, choice preserved until submission, price displayed',async()=>{

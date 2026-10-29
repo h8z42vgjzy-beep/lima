@@ -6,7 +6,9 @@
       this.stage = stage; this.game = game; this.me = me; this.otherName = otherName; this.call = call;
       this.canvas = stage.querySelector('canvas'); this.ctx = this.canvas.getContext('2d');
       this.status = stage.querySelector('[data-dino-status]'); this.button = stage.querySelector('[data-dino-jump]');
-      this.flash = stage.querySelector('[data-dino-flash]'); this.reduced = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+      this.flash = stage.querySelector('[data-dino-flash]'); this.reduced = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches||document.body.classList.contains('quiet-effects');
+      const theme=getComputedStyle(document.body);this.colors={mine:theme.getPropertyValue('--accent').trim()||'#c3f57c',other:theme.getPropertyValue('--accent-2').trim()||'#cfacff',base:theme.getPropertyValue('--app-bg').trim()||'#11121e',edge:theme.getPropertyValue('--edge').trim()||'#212335'};
+      this.background=new Image();this.background.src='/art/'+(document.body.dataset.theme||'night')+'.webp';
       this.particles = []; this.near = new Set(); this.combo = 0; this.lastFrame = performance.now(); this.lastCountdown = null; this.finishShown = false;
       this.sequence = 0; this.frame = null; this.snapshot = null; this.received = 0; this.prediction = null; this.reconnectTimer = null;
       this.key = e => {
@@ -68,7 +70,7 @@
       if (mine) { this.combo = 0; this.say('KAKTUS!', 'danger'); this.stage.classList.remove('dino-crash'); void this.stage.offsetWidth; this.stage.classList.add('dino-crash'); }
     }
     finish(winner) {
-      if (this.finishShown) return; this.finishShown = true;
+      if (this.finishShown) return; this.finishShown = true;globalThis.fStudio?.sync();
       if (winner === this.me) { this.say('DU GEWINNST!', 'win'); for (let x = 70; x < 700; x += 70) this.burst(x, 260 - Math.random() * 170, x % 140 ? '#cfacff' : '#c3f57c', 10, 'confetti'); }
       else if (!winner) { this.say('GLEICHSTAND!', 'win'); this.burst(360, 175, '#e9dcff', 35, 'confetti'); }
     }
@@ -95,15 +97,16 @@
       if (!this.stage.isConnected) return this.stop();
       const c = this.ctx, now = performance.now(), frameSeconds = Math.min(.05, (now - this.lastFrame) / 1000), s = this.snapshot, age = s ? (now - this.received) / 1000 : 0; this.lastFrame = now;
       const dt = s?.phase === 'running' && !this.networkLost ? Math.min(.1, age) : 0;
-      c.clearRect(0, 0, 720, 348); c.fillStyle = '#11121e'; c.fillRect(0, 0, 720, 348);
+      c.clearRect(0, 0, 720, 348); c.fillStyle = this.colors.base; c.fillRect(0, 0, 720, 348);
+      if(this.background.complete&&this.background.naturalWidth){c.globalAlpha=.5;c.drawImage(this.background,0,0,720,348);c.globalAlpha=1;}
       c.fillStyle = '#65617f'; for (let i = 0; i < 30; i++) c.fillRect((i * 157) % 720, 18 + (i * 53) % 135, 2, 2);
       if (s?.phase === 'running') { c.strokeStyle = '#bda1dc25'; c.lineWidth = 2; for (let i = 0; i < 8; i++) { const x = (i * 117 - s.distance * (1.2 + i % 3 * .2)) % 820; c.beginPath(); c.moveTo((x + 820) % 820, 48 + i * 35); c.lineTo((x + 870) % 870, 48 + i * 35); c.stroke(); } }
       c.fillStyle = '#c3b4e5'; c.beginPath(); c.arc(651, 44, 17, 0, Math.PI * 2); c.fill();
       c.fillStyle = '#11121e'; c.beginPath(); c.arc(659, 38, 16, 0, Math.PI * 2); c.fill();
       const players = s?.players?.length ? s.players : [{ id: this.game.creator, y: 0, vy: 0, alive: true }, { id: this.game.opponent, y: 0, vy: 0, alive: true }];
       players.forEach((p, i) => {
-        const floor = 161 + i * 162, mine = p.id === this.me, color = mine ? '#c3f57c' : '#cfacff';
-        c.fillStyle = '#212335'; c.fillRect(0, floor + 1, 720, 2);
+        const floor = 161 + i * 162, mine = p.id === this.me, color = mine ? this.colors.mine : this.colors.other;
+        c.fillStyle = this.colors.edge; c.fillRect(0, floor + 1, 720, 2);
         c.fillStyle = '#464357';
         for (let n = 0; n < 13; n++) c.fillRect(((n * 71 - (s?.distance || 0) * .35) % 750 + 750) % 750, floor + 14, 13, 2);
         c.font = '600 14px system-ui'; c.fillStyle = color;

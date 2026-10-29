@@ -1,10 +1,10 @@
 /* Translate interface nodes only. Posts, messages, names and uploaded text stay untouched. */
-(()=>{'use strict';let language='de',scheduled=false;const original=new WeakMap(),attributes=new WeakMap();
-const skip='script,style,textarea,code,pre,.post-body,.extra-text,.extra-entry>h3,.comment-card>p,.author-button,.account-name,.chat-heading h2,.dock-track,.audio-info>strong,.audio-info>span,.photo-watermark,.moderation-notice>p,.activity-notice>strong,.profile-name,[data-user-content]';
+(()=>{'use strict';let language=['de','en','ru','uk'].includes(document.documentElement.lang)?document.documentElement.lang:'de',scheduled=false;const original=new WeakMap(),attributes=new WeakMap();
+const skip='script,style,textarea,code,pre,.post-body,.extra-text,.extra-entry>h3,.comment-card>p,.message-body,.message time,.author-button,.account-name,.chat-heading h2,.dock-track,.audio-info>strong,.audio-info>span,.photo-watermark,.moderation-notice>p,.activity-notice>strong,.profile-name,[data-user-content]';
 const patterns=[
- [/^Foto hochladen \/ öffnen: ([\d.,]+) Beleidigungen$/,['Photo upload / opening: {1} Beleidigungen','Загрузка / открытие фото: {1} Beleidigungen','Завантаження / відкриття фото: {1} Beleidigungen']],
- [/^(.+) Beleidigungen · virtuelle Punkte$/,['{1} Beleidigungen · virtual points','{1} Beleidigungen · виртуальные баллы','{1} Beleidigungen · віртуальні бали']],
- [/^Deine Probephase läuft bis (.+)\. Sie endet automatisch\.$/,['Your trial ends automatically on {1}.','Пробный период автоматически завершится {1}.','Пробний період автоматично завершиться {1}.']],
+ [/^AUSZEICHNUNGEN · (\d+) \/ 7$/,['ACHIEVEMENTS · {1} / 7','ДОСТИЖЕНИЯ · {1} / 7','ДОСЯГНЕННЯ · {1} / 7']],
+ [/^Deine Rückmeldung #(\d+) ist gespeichert\. Du findest ihren Status im Feedback-Bereich\.$/,['Your feedback #{1} is saved. Find its status in Feedback.','Отзыв #{1} сохранён. Его статус доступен в разделе отзывов.','Відгук #{1} збережено. Його статус доступний у розділі відгуків.']],
+ [/^AUSZEICHNUNG FREIGESCHALTET(.*)$/,['ACHIEVEMENT UNLOCKED{1}','ДОСТИЖЕНИЕ ОТКРЫТО{1}','ДОСЯГНЕННЯ ВІДКРИТО{1}']],
 
  [/^vor (\d+) Min\.$/,['{1} min ago','{1} мин. назад','{1} хв тому']],
  [/^vor (\d+) Std\.$/,['{1} hours ago','{1} ч. назад','{1} год тому']],
@@ -31,7 +31,7 @@ const patterns=[
 ];
 function translate(value){if(language==='de')return String(value);const s=String(value),key=s.trim().replace(/\s+/g,' '),entry=globalThis.F_TRANSLATIONS?.[key],index=['en','ru','uk'].indexOf(language);if(index<0)return s;if(entry)return s.replace(s.trim(),entry[index]);for(const [pattern,values]of patterns){const match=key.match(pattern);if(match)return values[index].replace(/\{(\d+)\}/g,(_,n)=>match[Number(n)]||'');}return s;}
 function visit(root){if(!root)return;const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);let node;while((node=walker.nextNode())){const parent=node.parentElement;if(!parent||parent.closest(skip))continue;let record=original.get(node);if(!record||node.nodeValue!==record.last)record={source:node.nodeValue,last:node.nodeValue};if(parent.tagName==='OPTION'&&!parent.hasAttribute('value'))parent.setAttribute('value',record.source.trim());const value=translate(record.source);if(node.nodeValue!==value)node.nodeValue=value;record.last=value;original.set(node,record);}
- for(const element of root.querySelectorAll('[placeholder],[aria-label],[title]')){if(element.closest('[data-user-content],script,style,.post-body,.extra-text,.author-button,.photo-watermark'))continue;let records=attributes.get(element)||{};for(const key of ['placeholder','aria-label','title']){const current=element.getAttribute(key);if(current===null)continue;let record=records[key];if(!record||current!==record.last)record={source:current};const value=translate(record.source);if(current!==value)element.setAttribute(key,value);record.last=value;records[key]=record;}attributes.set(element,records);}}
+ for(const element of root.querySelectorAll('[placeholder],[aria-label],[title]')){if(element.closest(skip))continue;let records=attributes.get(element)||{};for(const key of ['placeholder','aria-label','title']){const current=element.getAttribute(key);if(current===null)continue;let record=records[key];if(!record||current!==record.last)record={source:current};const value=translate(record.source);if(current!==value)element.setAttribute(key,value);record.last=value;records[key]=record;}attributes.set(element,records);}}
 function schedule(){if(scheduled)return;scheduled=true;requestAnimationFrame(()=>{scheduled=false;visit(document.body);});}
 globalThis.fTranslate=translate;globalThis.fLocale={set(code){language=['de','en','ru','uk'].includes(code)?code:'de';document.documentElement.lang=language;schedule();},get:()=>language,refresh:schedule};
 new MutationObserver(schedule).observe(document.body,{childList:true,subtree:true,characterData:true});schedule();

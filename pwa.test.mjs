@@ -10,13 +10,13 @@ test('Installable manifest has existing PNG icons, root scope and standalone dis
  assert.ok(manifest.icons.some(i=>i.purpose==='maskable'));
  const html=read('index.html').toString();assert.match(html,/rel="manifest"/);assert.match(html,/id="install-app"/);
 });
-test('Offline worker caches only public fallback and icons; bypasses API, stream and private media',async()=>{
+test('Offline worker caches public fallback and app assets; bypasses API, stream and private media',async()=>{
  const handlers={},saved=[],deleted=[];
- const offline={offline:true},caches={open:async()=>({addAll:async urls=>saved.push(...urls)}),keys:async()=>['unrelated-cache','feindschaft-offline-old','feindschaft-offline-v8'],delete:async key=>deleted.push(key),match:async()=>offline};
+ const offline={offline:true},caches={open:async()=>({addAll:async urls=>saved.push(...urls)}),keys:async()=>['unrelated-cache','feindschaft-offline-old','feindschaft-offline-v11'],delete:async key=>deleted.push(key),match:async()=>offline};
  const self={location:{origin:'https://example.test'},clients:{claim:async()=>{}},addEventListener:(name,fn)=>handlers[name]=fn};
  vm.runInNewContext(read('sw.js').toString(),{self,caches,URL,fetch:async()=>{throw Error('offline');}});
  let pending;handlers.install({waitUntil:p=>pending=p});await pending;
- assert.deepEqual(saved.sort(),['/offline.html','/pwa.css','/app-icon-192.png','/app-icon-512.png','/app-icon-maskable.png','/apple-touch-icon.png'].sort());
+ assert.deepEqual(saved.sort(),['/offline.html','/offline.js','/pwa.css','/design-system.css','/theme-boot.js','/app-icon-192.png','/app-icon-512.png','/app-icon-maskable.png','/apple-touch-icon.png'].sort());
  handlers.activate({waitUntil:p=>pending=p});await pending;assert.deepEqual(deleted,['feindschaft-offline-old']);
  for(const path of ['/api/me','/api/messages','/api/reset-stream','/media/1','/reset-film.mp4']){
   let intercepted=false;handlers.fetch({request:{method:'GET',mode:'navigate',url:'https://example.test'+path},respondWith:()=>intercepted=true});assert.equal(intercepted,false,path);

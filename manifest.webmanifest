@@ -1,11 +1,58 @@
 {
- "id":"/", "name":"Feindschaft – Aber mit Blumen", "short_name":"Feindschaft",
- "description":"Kontern, kennenlernen, Musik teilen und gemeinsam spielen.",
- "lang":"de", "start_url":"/", "scope":"/", "display":"standalone",
- "background_color":"#17151e", "theme_color":"#22242a", "orientation":"any",
- "icons":[
-  {"src":"/app-icon-192.png","sizes":"192x192","type":"image/png","purpose":"any"},
-  {"src":"/app-icon-512.png","sizes":"512x512","type":"image/png","purpose":"any"},
-  {"src":"/app-icon-maskable.png","sizes":"512x512","type":"image/png","purpose":"maskable"}
- ]
+  "id": "/",
+  "name": "F — Feindschaft",
+  "short_name": "Feindschaft",
+  "description": "Mit Stil und Charme. Kontern, Menschen kennenlernen, Musik teilen und gemeinsam spielen.",
+  "lang": "de",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#090611",
+  "theme_color": "#090611",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/app-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/app-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/app-icon-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "categories": [
+    "social",
+    "entertainment",
+    "games"
+  ],
+  "shortcuts": [
+    {
+      "name": "Nachrichten",
+      "url": "/?view=chats",
+      "icons": [
+        {
+          "src": "/app-icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Spiele",
+      "url": "/?view=games"
+    },
+    {
+      "name": "Neuer Beitrag",
+      "url": "/?view=compose"
+    }
+  ]
 }

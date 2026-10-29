@@ -1,7 +1,7 @@
 import {readFileSync,writeFileSync,existsSync} from 'node:fs';
 import path from 'node:path';
 export const chapters=[['flowers','bloom','comet'],['footer','pride','moon'],['heart','spark','orbit'],['petal','equality','rainbow'],['aurora','echo','leaf'],['wave','pulse','crystal'],['sun','peace','nova'],['unity','dream','galaxy']];
-export const defaults={language:'de',theme:'night',enabled:true,replies:true,messages:true,invitations:true,chess:true,effects:true};
+export const defaults={language:'de',theme:'night',enabled:true,reactions:true,replies:true,messages:true,invitations:true,chess:true,effects:true};
 export function validSubscription(s){
  let u;try{u=new URL(s?.endpoint);}catch{return false;}
  const host=u.hostname;
@@ -18,12 +18,12 @@ export async function createActivity({db,one,all,run,now,dataDir,blocked,ledger,
  CREATE TABLE IF NOT EXISTS discoveries(user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,secret TEXT NOT NULL,created INTEGER NOT NULL,PRIMARY KEY(user_id,secret));`);
  for(const [name,type]of [['last_status','TEXT'],['checked','INTEGER']])if(!all('PRAGMA table_info(push_devices)').some(c=>c.name===name))db.exec('ALTER TABLE push_devices ADD COLUMN '+name+' '+type);
  let driver=pushDriver,key=null;
- if(!driver){try{driver=(await import('web-push')).default;}catch(e){if(e.code!=='ERR_MODULE_NOT_FOUND')throw e;console.info('Push unavailable: install dependencies with yarn.');}}
+ if(!driver){try{driver=(await import('web-push')).default;}catch(e){if(e.code!=='ERR_MODULE_NOT_FOUND')throw e;console.warn('Push unavailable: install dependencies with yarn.');}}
  if(driver){const file=path.join(dataDir,'push-vapid.json');if(existsSync(file))key=JSON.parse(readFileSync(file,'utf8'));else{key=driver.generateVAPIDKeys();writeFileSync(file,JSON.stringify(key),{mode:0o600,flag:'wx'});}driver.setVapidDetails(process.env.F_PUSH_SUBJECT||'https://lima-te6q.onrender.com',key.publicKey,key.privateKey);}
  const settings=uid=>({...defaults,...JSON.parse(one('SELECT value FROM account_settings WHERE user_id=?',uid)?.value||'{}')});
  function save(uid,b){const p=settings(uid);if(b.language!==undefined){if(!['de','en','ru','uk'].includes(b.language))throw [400,'Ungültige Sprache.'];p.language=b.language;}if(b.theme!==undefined){if(!['night','pride','forest','ice'].includes(b.theme))throw [400,'Ungültiges Design.'];p.theme=b.theme;}for(const k of Object.keys(defaults).filter(k=>!['language','theme'].includes(k)))if(b[k]!==undefined){if(typeof b[k]!=='boolean')throw [400,'Ungültige Einstellung.'];p[k]=b[k];}run('INSERT INTO account_settings VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET value=excluded.value',uid,JSON.stringify(p));return p;}
  function notify(uid,actor,type,target,event){if(uid===actor||blocked(uid,actor))return;const p=settings(uid);if(!p.enabled||!p[type])return;const r=run('INSERT OR IGNORE INTO activity_notices(user_id,actor,type,target,event_key,created) VALUES(?,?,?,?,?,?)',uid,actor,type,target,event,now());if(!r.changes)return;run('INSERT INTO push_jobs(notice_id,endpoint,next_at) SELECT ?,endpoint,? FROM push_devices WHERE user_id=?',Number(r.lastInsertRowid),now(),uid);}
- const text={de:{replies:'Neue Antwort auf deinen Kommentar',messages:'Neue private Nachricht',invitations:'Neue Spieleinladung',chess:'Neues aus deiner Schachpartie'},en:{replies:'New reply to your comment',messages:'New private message',invitations:'New game invitation',chess:'Your chess game has an update'},ru:{replies:'Новый ответ на ваш комментарий',messages:'Новое личное сообщение',invitations:'Приглашение в игру',chess:'Обновление шахматной партии'},uk:{replies:'Нова відповідь на ваш коментар',messages:'Нове приватне повідомлення',invitations:'Запрошення до гри',chess:'Оновлення шахової партії'}};
+ const text={de:{reactions:'Neue Reaktion auf deinen Beitrag',replies:'Neue Antwort auf deinen Kommentar',messages:'Neue private Nachricht',invitations:'Neue Spieleinladung',chess:'Neues aus deiner Schachpartie'},en:{reactions:'New reaction to your post',replies:'New reply to your comment',messages:'New private message',invitations:'New game invitation',chess:'Your chess game has an update'},ru:{reactions:'Новая реакция на вашу публикацию',replies:'Новый ответ на ваш комментарий',messages:'Новое личное сообщение',invitations:'Приглашение в игру',chess:'Обновление шахматной партии'},uk:{reactions:'Нова реакція на ваш допис',replies:'Нова відповідь на ваш коментар',messages:'Нове приватне повідомлення',invitations:'Запрошення до гри',chess:'Оновлення шахової партії'}};
  let busy=false;
  async function drain(){if(busy||!driver)return;busy=true;try{
  run('DELETE FROM push_devices WHERE session NOT IN (SELECT token FROM sessions WHERE expires>?)',now());

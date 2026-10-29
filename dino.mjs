@@ -45,7 +45,7 @@ export function stepRace(state, course) {
 }
 
 // One authoritative simulation per accepted 1:1 chat. Clients can only jump.
-export function createDinoService({ one, run, now, chatAccess, assertAvailable }) {
+export function createDinoService({ one, run, now, chatAccess, assertAvailable, onResult=()=>{} }) {
   const rooms = new Map();
   // An interrupted live race cannot resume with an unfair offline head start.
   run("UPDATE chat_games SET status='cancelled',version=version+1 WHERE type='dino-run' AND status='active'");
@@ -58,6 +58,7 @@ export function createDinoService({ one, run, now, chatAccess, assertAvailable }
     if (room.ended) return;
     room.ended = true; room.state.phase = status; if (reason) room.state.reason = reason;
     run('UPDATE chat_games SET status=?,winner=?,state=?,version=version+1,updated=? WHERE id=?', status, winner, JSON.stringify(room.state), now(), room.game.id);
+    onResult(one('SELECT * FROM chat_games WHERE id=?',room.game.id));
     broadcast(room, winner); clearInterval(room.timer);
     for (const client of room.clients) client.res.end();
     rooms.delete(room.game.id);

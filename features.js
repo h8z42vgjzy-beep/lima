@@ -6,6 +6,7 @@ let currentPhotoURL = null;
 let gamesVisible = false;
 
 function reactionBurst(rect, symbol = '✳') {
+  if(globalThis.fStudio){globalThis.fStudio.effect(rect,true);return;}
   if (globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
   for (let i = 0; i < 4; i++) {
     const particle = document.createElement('span'); particle.className = 'effect-particle';
@@ -16,7 +17,7 @@ function reactionBurst(rect, symbol = '✳') {
   }
 }
 
-function points(value) { return Number(value || 0).toLocaleString(globalThis.fLocale?.get()||'de', { maximumFractionDigits: 1 }); }
+function points(value) { return Number(value || 0).toLocaleString('de-DE', { maximumFractionDigits: 1 }); }
 function renderPostMedia(p) {
   const m = p.media;
   if (!m) return '';
@@ -24,11 +25,11 @@ function renderPostMedia(p) {
     if(m.view_mode==='once'&&!m.owned)return `<div class="post-media photo-locked"><span>◷</span><strong>20-Sekunden-Foto</strong>${m.viewed?'<p>Bereits geöffnet · nicht erneut verfügbar</p>':`<button class="button dark" data-action="unlock" data-id="${m.id}">Einmal öffnen · ${points(m.open_price)} ✳</button><small>Jede Person kann dieses Foto einmal 20 Sekunden ansehen.</small>`}</div>`;
 
     return `<div class="post-media photo-card">${m.unlocked
-      ? `<button class="photo-preview" data-action="view-photo" data-id="${m.id}" aria-label="Foto vergrößern"><img src="/media/${m.id}" alt="Foto von ${esc(p.name)}" loading="lazy" data-photo="${m.id}"></button><small>${m.owned ? `Dein Foto · andere öffnen für ${points(m.open_price)} ✳ · dein Anteil ${points(m.open_price / 2)} ✳` : 'Freigeschaltet · ohne erneute Kosten'}</small>`
+      ? `<button class="photo-preview" data-action="view-photo" data-id="${m.id}" aria-label="Foto vergrößern"><img src="/media/${m.id}" alt="Foto von ${esc(p.name)}" loading="lazy" decoding="async" width="1200" height="900" data-photo="${m.id}"></button><small>${m.owned ? `Dein Foto · andere öffnen für ${points(m.open_price)} ✳ · dein Anteil ${points(m.open_price / 2)} ✳` : 'Freigeschaltet · ohne erneute Kosten'}</small>`
       : `<div class="photo-locked"><span aria-hidden="true">▧</span><strong>Ein Foto. Dein nächster Einblick.</strong><button class="button dark small" data-action="unlock" data-id="${m.id}">${m.open_price ? `Foto öffnen · ${points(m.open_price)} ✳` : 'Foto öffnen · kostenlos'}</button><small>${points(m.open_price / 2)} ✳ gehen an ${esc(p.name)} · einmalig pro Person</small><small>${m.view_mode==='permanent'?'Dauerhaft ansehen · bis zur manuellen Löschung':'Bis zum Ablauf erneut ansehen'}</small></div>`}</div>`;
   }
   return m.kind === 'video'
-    ? `<video class="post-media feed-video" controls playsinline preload="metadata" src="/media/${m.id}" aria-label="Video von ${esc(p.name)}"></video>`
+    ? `<video class="post-media feed-video" controls playsinline preload="none" data-src="/media/${m.id}" aria-label="Video von ${esc(p.name)}"></video>`
     : `<div class="audio-card" data-audio-card="${m.id}"><div class="record-art" aria-hidden="true"><span>f✳</span></div><div class="audio-info"><small>SOUNDTRACK ZUM WELTSCHMERZ</small><strong>${esc(p.body.slice(0,80))}</strong><span>Von ${esc(p.name)} · kostenlos anhören</span></div><button class="audio-play" data-action="play-music" data-id="${m.id}" aria-label="Musik von ${esc(p.name)} abspielen">▶</button><div class="audio-bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div>`;
 }
 
@@ -87,7 +88,7 @@ async function submitFeedPost(e) {
       if (price && user.balance < price) throw Error('Für dieses Foto fehlen Beleidigungen. Hole zuerst deine Tagespunkte ab.');
       if (!postUploadToken) postUploadToken = crypto.randomUUID();
       const fd = new FormData();
-      fd.set('body', body); fd.set('category', category.id); fd.set('rights', 'true'); fd.set('file', file);
+      fd.set('body', body); fd.set('category', category.id); fd.set('rights', 'true'); fd.set('file', await globalThis.fMedia?.prepare(file)||file);
       fd.set('viewMode',$('#photo-mode')?.value||'once');fd.set('expectedPrice', price); fd.set('uploadToken', postUploadToken);
       const result = await api('upload-post', fd); charged = result.charged || 0;
     } else await api('post', { body, category: category.id });
@@ -140,7 +141,8 @@ async function displayPhoto(url, expiresIn = null) {
 async function confirmPhotoUnlock(id) {
   const m = posts.find(p => p.media?.id === id)?.media;
   if (!m) { await refresh(); throw Error('Bitte öffne den aktuellen Foto-Beitrag erneut.'); }
-  if (m.unlocked) return displayPhoto('/media/' + id);
+  if (m.unlocked && m.view_mode!=='once') return displayPhoto('/media/' + id);
+  if(m.view_mode==='once'&&m.viewed)throw Error('Dieses Foto wurde bereits geöffnet.');
   showModal(`<div class="modal-eyebrow">FOTO FREISCHALTEN</div><h2 id="modal-title">${m.view_mode==='once'?'Einmal zahlen. 20 Sekunden ansehen.':'Einmal zahlen. Wieder ansehen.'}</h2><p>Dieses Foto kostet <strong>${points(m.open_price)} Beleidigungen</strong>. Davon erhält die hochladende Person ${points(m.open_price / 2)}.</p><p>Dein Guthaben: ${points(user.balance)}. ${m.view_mode==='once'?'Nach dem ersten Öffnen bleiben 20 Sekunden. Danach kannst du das Foto nicht erneut öffnen.':m.view_mode==='permanent'?'Dieses Foto bleibt bis zur manuellen Löschung verfügbar.':'Die Freischaltung gilt bis zur Löschung des Beitrags.'}</p><button class="button dark full" data-action="confirm-unlock" data-id="${id}" data-price="${m.open_price}">${points(m.open_price)} ✳ bezahlen &amp; öffnen</button><button class="text-link" data-action="close">Abbrechen</button>`, 'photo-confirm');
 }
 async function purchasePhoto(id, price) {
@@ -155,20 +157,27 @@ async function openChatPhoto(id) {
   await loadMessages();
 }
 async function showWalletHistory() {
-  if (!requireUser()) return;
-  const data = await api('wallet');
-  showModal(`<div class="modal-eyebrow">DEINE BUCHUNGEN</div><h2 id="modal-title">${points(data.balance)} Beleidigungen</h2><p>Foto-Kosten, Einnahmen sowie Chat- und Spielegebühren. Kategorien bleiben kostenlos.</p>${data.entries.length ? data.entries.map(e => `<div class="person-row"><div class="person-info"><strong>${esc(e.description)}</strong><small>${time(e.created)}</small></div><strong>${e.amount > 0 ? '+' : ''}${points(e.amount)} ✳</strong></div>`).join('') : '<p>Noch keine Foto-Buchungen.</p>'}`, 'wallet-history');
+  if(!requireUser())return;
+  const data=await api('wallet');
+  showModal(`<div class="modal-eyebrow">DEINE BELEIDIGUNGEN</div><h2 id="modal-title">${points(data.balance)} Beleidigungen</h2><p>Alle aktuellen Guthabenbestandteile: Tagespunkte, erhaltene Reaktionen, Kosten und Einnahmen. Reaktionsbuchungen zeigen den gegenwärtigen Stand einer Bewertung.</p>${data.entries.length?data.entries.map(e=>`<div class="transaction-row"><span class="transaction-icon">${e.amount>0?'↙':'↗'}</span><div class="transaction-copy"><strong>${esc(e.description)}</strong><small>${new Date(e.created).toLocaleString(globalThis.fLocale?.get()||'de')}</small></div><strong class="transaction-amount ${e.amount>0?'positive':''}">${e.amount>0?'+':''}${points(e.amount)} ✳</strong></div>`).join(''):'<div class="empty">Noch keine Buchungen.</div>'}`, 'wallet-history');
+}
+
+function updateChatSendPrice(){
+  const input=$('#message-input'),file=$('#chat-file')?.files[0],form=$('#message-form');if(!input||!form)return;
+  const cost=(input.value.trim()?5:0)+(file?20:0),button=form.querySelector('button[type="submit"]');
+  if(button){button.textContent=(cost||5)+' ✳ ↗';button.disabled=!cost;}
+  const attachment=$('#chat-attachment');if(attachment){attachment.hidden=!file;if(file){attachment.querySelector('span').textContent=file.name;}}
 }
 
 async function renderChatScreen(id, person) {
   gamesVisible = false; chatId = id; chatPerson = person;
-  showModal(`<div class="chat-heading"><button class="chat-back" data-action="chats" aria-label="Zurück zu Chats">←</button>${avatar(person)}<div><h2 id="modal-title">${esc(person.name)}</h2><div class="form-hint">Einzelchat freigegeben</div></div></div><div class="chat-tools"><button class="mini-button" id="games-toggle" data-action="chat-games" aria-expanded="false" aria-controls="chat-games">Spiele · Einladung 5 ✳</button><button class="mini-button" data-action="report" data-type="user" data-id="${person.id}">Melden</button><button class="block-chat" data-action="block" data-id="${person.id}">Blockieren</button></div><section id="chat-games" class="chat-games" hidden aria-label="Spiele für diesen Einzelchat"></section><div class="messages" id="messages" aria-live="polite"></div><form id="message-form" class="chat-form"><label class="sr-only" for="message-input">Deine Nachricht</label><input id="message-input" name="body" maxlength="1000" autocomplete="off" placeholder="Dein nächster Konter …"><label class="upload-label">Foto<input id="chat-file" type="file" accept="image/jpeg,image/png,image/webp" aria-label="Chat-Foto auswählen · Senden kostet 20 Beleidigungen"></label><button class="button dark" type="submit" aria-label="Nachricht senden">5 ✳ ↗</button></form><p class="form-hint">Text senden: 5 Beleidigungen. Lesen: kostenlos. Chat-Foto senden: 20 Beleidigungen; öffnen: kostenlos, einmal für die andere Person 20 Sekunden sichtbar. Nach 7 Tagen nicht mehr erreichbar, nach 28 Tagen aus dem aktiven System gelöscht. Textnachrichten bleiben erhalten.</p>`, 'chat');
-  chatId = id;
+  showModal(`<div class="chat-heading"><button class="chat-back" data-action="chats" aria-label="Zurück zu Chats">←</button>${avatar(person)}<div><h2 id="modal-title">${esc(person.name)}</h2><div class="form-hint">Einzelchat freigegeben</div></div></div><div class="chat-tools"><button class="mini-button" id="games-toggle" data-action="chat-games" aria-expanded="false" aria-controls="chat-games">Spiele · Einladung 5 ✳</button><button class="mini-button" data-action="report" data-type="user" data-id="${person.id}">Melden</button><button class="block-chat" data-action="block" data-id="${person.id}">Blockieren</button></div><section id="chat-games" class="chat-games" hidden aria-label="Spiele für diesen Einzelchat"></section><div class="messages" id="messages" aria-live="polite"></div><div id="chat-attachment" class="chat-attachment" hidden><span data-user-content></span><button type="button" data-action="remove-chat-photo" aria-label="Foto entfernen">×</button></div><form id="message-form" class="chat-form"><label class="sr-only" for="message-input">Deine Nachricht</label><input id="message-input" name="body" maxlength="1000" autocomplete="off" placeholder="Dein nächster Konter …"><label class="upload-label">Foto<input id="chat-file" type="file" accept="image/jpeg,image/png,image/webp" aria-label="Chat-Foto auswählen · Senden kostet 20 Beleidigungen"></label><button class="button dark" type="submit" aria-label="Nachricht senden">5 ✳ ↗</button></form><p class="form-hint">Text senden: 5 Beleidigungen. Lesen: kostenlos. Chat-Foto senden: 20 Beleidigungen; öffnen: kostenlos, einmal für die andere Person 20 Sekunden sichtbar. Nach 28 Tagen aus dem aktiven System gelöscht. Textnachrichten bleiben erhalten.</p>`, 'chat');
+  chatId = id;$('#message-input').addEventListener('input',updateChatSendPrice);$('#chat-file').addEventListener('change',updateChatSendPrice);updateChatSendPrice();
   const load = () => Promise.all([loadMessages(), loadChatGames()]);
   await load(); chatTimer = setInterval(() => load().catch(() => {}), 2500);
 }
 async function loadChatMessages() {
-  if (!chatId || modalView !== 'chat') return;
+  if (!chatId || modalView !== 'chat' || document.hidden) return;
   const id = chatId, data = await api('messages?request=' + id);
   if (id !== chatId || modalView !== 'chat') return;
   const viewer=$('#photo-viewer');if(viewer?.open&&viewer.dataset.chat==='true'&&viewer.dataset.mediaId&&!data.messages.some(m=>String(m.mediaId)===viewer.dataset.mediaId))closePhotoViewer();
@@ -176,7 +185,7 @@ async function loadChatMessages() {
   if (old === signature) return;
   const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 60;
   box.dataset.signature = signature;
-  box.innerHTML = data.messages.length ? data.messages.map(m => `<div class="message ${m.sender === user.id ? 'mine' : ''}">${m.mediaId ? ['ready', 'own'].includes(m.photoState) ? `<button class="chat-photo-button" data-action="view-chat-photo" data-id="${m.mediaId}">${m.photoState === 'own' ? 'Dein Foto ansehen · kostenlos' : 'Foto öffnen · einmal 20 Sek. · kostenlos'}</button>` : `<span class="expired-photo">${m.photoState === 'opened' ? 'Foto bereits geöffnet · nicht erneut verfügbar' : 'Foto abgelaufen'}</span>` : `<span data-user-content>${esc(m.body)}</span>`}<div class="message-meta"><time>${new Date(m.created).toLocaleTimeString(globalThis.fLocale?.get()||'de', { hour: '2-digit', minute: '2-digit' })}</time><button data-action="report" data-type="message" data-id="${m.id}" aria-label="Diese Nachricht melden">Melden</button></div></div>`).join('') : '<div class="empty">Euer Chat ist freigegeben.<br>Schreib etwas oder lade zu einem Spiel ein.</div>';
+  box.innerHTML = data.messages.length ? data.messages.map(m => `<div class="message ${m.sender === user.id ? 'mine' : ''}">${m.mediaId ? ['ready', 'own'].includes(m.photoState) ? `<button class="chat-photo-button" data-action="view-chat-photo" data-id="${m.mediaId}">${m.photoState === 'own' ? 'Dein Foto ansehen · kostenlos' : 'Foto öffnen · einmal 20 Sek. · kostenlos'}</button>` : `<span class="expired-photo">${m.photoState === 'opened' ? 'Foto bereits geöffnet · nicht erneut verfügbar' : 'Foto abgelaufen'}</span>` : `<span class="message-body" data-user-content>${esc(m.body)}</span>`}<div class="message-meta"><time>${new Date(m.created).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}</time>${!m.mediaId ? '<button type="button" class="message-delete-button" data-action="delete-chat-text" data-id="'+m.id+'" data-own="'+(m.sender===user.id?'1':'0')+'">'+(globalThis.fMessageDelete?.label()||'Löschen')+'</button>' : ''}<button data-action="report" data-type="message" data-id="${m.id}" aria-label="Diese Nachricht melden">Melden</button></div></div>`).join('') : '<div class="empty">Euer Chat ist freigegeben.<br>Schreib etwas oder lade zu einem Spiel ein.</div>';
   if (atBottom) box.scrollTop = box.scrollHeight;
 }
 
@@ -229,12 +238,12 @@ function renderGameCard(g, catalog, nameOf) {
     else board=`<p>Bereich: <strong>${g.state.low}–${g.state.high}</strong>${g.state.answer?` · Gesuchte Zahl: ${g.state.answer}`:''}</p><ol class="guess-history">${g.state.guesses.map(x=>`<li>${esc(nameOf(x.mark===1?g.creator:g.opponent))}: ${x.guess} → ${esc(x.hint)}</li>`).join('')}</ol>${ownTurn?`<form id="guess-form" data-id="${g.id}" data-version="${g.version}"><label class="field" for="game-guess">Deine Zahl</label><input id="game-guess" name="guess" type="number" min="${g.state.low}" max="${g.state.high}" step="1" required><button class="button dark small">Raten</button></form>`:''}`;
   }
   const controls=g.status==='invited'&&g.opponent===user.id?button('accept','Annehmen')+button('decline','Ablehnen'):g.status==='active'?g.type==='chess'?button('resign','Aufgeben'):button('cancel','Spiel beenden'):g.status==='invited'?button('cancel','Einladung zurückziehen'):'';
-  const roles=g.type==='chess'?`${esc(nameOf(g.creator))}: Weiß · ${esc(nameOf(g.opponent))}: Schwarz · dauerhaft gespeichert`:g.type==='dino-run'?'Dein Dino ist grün. Der andere ist lila.':`${esc(nameOf(g.creator))}: X / ● · ${esc(nameOf(g.opponent))}: O / ○`;
+  const roles=g.type==='chess'?`${esc(nameOf(g.creator))}: Weiß · ${esc(nameOf(g.opponent))}: Schwarz · dauerhaft gespeichert`:g.type==='dino-run'?'Die beiden Spuren sind mit euren Namen beschriftet.':`${esc(nameOf(g.creator))}: X / ● · ${esc(nameOf(g.opponent))}: O / ○`;
   return `<div class="game-card ${g.type==='chess'?'chess-card':''}"><h3>${esc(name)}</h3><p class="${g.status==='finished'?'game-result':''}" role="status">${esc(status)}</p>${controls}${board}<p class="form-hint">${roles} · kostenlos</p></div>`;
 }
 
 async function loadChatGames(expand = false) {
-  if (!chatId || modalView !== 'chat') return;
+  if (!chatId || modalView !== 'chat' || document.hidden) return;
   const request = chatId, data = await api('games?request=' + request);
   if (request !== chatId || modalView !== 'chat') return;
   const container = $('#chat-games'); if (!container) return;
@@ -259,7 +268,7 @@ async function sendGameAction(dataset) {
   const input = { game: Number(dataset.id), version: Number(dataset.version), action: dataset.gameAction };
   if (dataset.cell !== undefined) input.cell = Number(dataset.cell);
   if (dataset.column !== undefined) input.column = Number(dataset.column);
-  if(input.action==='accept'){if(!confirm(globalThis.fTranslate?.('Spieleinladung für 5 Beleidigungen annehmen?')||'Spieleinladung für 5 Beleidigungen annehmen?'))return;input.expectedCost=5;}try { await api('game-action', input);if(input.action==='accept'){user=(await api('me')).user;updateWallet();} } finally { await loadChatGames(); }
+  if(input.action==='accept'){if(!confirm(globalThis.fTranslate?.('Spieleinladung für 5 Beleidigungen annehmen?')||'Spieleinladung für 5 Beleidigungen annehmen?'))return;input.expectedCost=5;}try { await api('game-action', input);user=(await api('me')).user;updateWallet(); } finally { await loadChatGames(); }
 }
 function choosePromotion(white) {
   return new Promise(resolve=>{
@@ -309,7 +318,7 @@ async function showAdminReport(id) {
 }
 
 function showPrivacyDetails() {
-  showModal(`<div class="modal-eyebrow">TRANSPARENT IM TESTBETRIEB</div><h2 id="modal-title">Deine Daten und Inhalte.</h2><ul class="rule-list"><li><strong>Was gespeichert wird</strong>Spitzname, gesalzener Passwort-Hash, freiwillige Profilangaben, Beiträge, Fotos, Nachrichten, Bewertungen, virtuelle Buchungen, Spielstände, Meldungen und Blockierungen.</li><li><strong>Profil und Feed</strong>Identitätsangaben sind nur bei deiner aktiven Freigabe für andere angemeldete Personen sichtbar. Feed-Texte können auch ohne Anmeldung sichtbar sein. Private Nachrichten und Chatspiele sind in der App auf die beiden Chatpersonen begrenzt.</li><li><strong>Fotos und Fristen</strong>Feed-Beiträge und Chat-Fotos sind regulär nach sieben Tagen nicht mehr erreichbar. Ausnahme: ausdrücklich dauerhaft veröffentlichte Feed-Fotos bleiben bis zur manuellen Löschung erhalten, auch beim Speicher-Reset. Chat-Fotos kann die empfangende Person einmal für höchstens 20 Sekunden öffnen. Nicht dauerhaft veröffentlichte Bilddateien bleiben bis zu 28 Tage für die Moderation im aktiven System und werden anschließend im Wartungslauf entfernt. Hosting-Sicherungen können länger bestehen; ihre vollständige Löschung ist hier nicht garantiert.</li><li><strong>Meldungen</strong>Die Moderation kann gemeldete Inhalte prüfen. Bei einer Nutzermeldung ist nur der Chat zwischen meldender und gemeldeter Person freigegeben, nicht andere private Chats. Nachrichten sind nicht Ende-zu-Ende-verschlüsselt; Personen mit direktem Serverzugriff könnten sie technisch lesen.</li><li><strong>Extras und Kontrolle</strong>Texte, Chat-Textnachrichten und Extras-Dokumente haben keine automatische Sieben-Tage-Frist. Eigene Beiträge lassen sich ausblenden/löschen, andere Personen blockieren und Inhalte melden. Eine vollständige Kontolöschung und Passwortwiederherstellung sind noch nicht eingebaut.</li><li><strong>Virtuelle Punkte</strong>Neue öffentliche Fotos kosten beim Hochladen den Kategorienpreis und beim Freischalten einmalig denselben Preis. Die Hälfte jeder Freischaltung erhält die hochladende Person. Kategorien und das Lesen sind kostenlos. Eine Chat-Anfrage kostet 200, Textversand 5, Chat-Fotoversand 20 und das Erstellen oder Annehmen eines Spiels jeweils 5 Beleidigungen. Es gibt keine Echtgeldzahlung.</li></ul><p>Verschwindende Fotos verhindern keine Screenshots oder externen Kopien. Verwende im Test keine vertraulichen Inhalte. Betreiberinformationen und das vollständige Sicherungs-/Löschkonzept müssen vor einem breiten öffentlichen Einsatz noch vervollständigt werden.</p>`, 'privacy');
+  showModal(`<div class="modal-eyebrow">TRANSPARENT IM TESTBETRIEB</div><h2 id="modal-title">Deine Daten und Inhalte.</h2>${globalThis.fNearby?.privacyHTML()||''}<ul class="rule-list"><li><strong>Was gespeichert wird</strong>Spitzname, gesalzener Passwort-Hash, freiwillige Profilangaben, Beiträge, Fotos, Nachrichten, Bewertungen, virtuelle Buchungen, Spielstände, Meldungen und Blockierungen.</li><li><strong>Profil und Feed</strong>Identitätsangaben sind nur bei deiner aktiven Freigabe für andere angemeldete Personen sichtbar. Feed-Texte können auch ohne Anmeldung sichtbar sein. Private Nachrichten und Chatspiele sind in der App auf die beiden Chatpersonen begrenzt.</li><li><strong>Fotos und Fristen</strong>Feed-Beiträge und Chat-Fotos sind regulär nach sieben Tagen nicht mehr erreichbar. Chat-Fotos kann die empfangende Person einmal für höchstens 20 Sekunden öffnen. Bilddateien bleiben bis zu 28 Tage für die Moderation im aktiven System und werden anschließend im Wartungslauf entfernt. Hosting-Sicherungen können länger bestehen; ihre vollständige Löschung ist hier nicht garantiert.</li><li><strong>Meldungen</strong>Die Moderation kann gemeldete Inhalte prüfen. Bei einer Nutzermeldung ist nur der Chat zwischen meldender und gemeldeter Person freigegeben, nicht andere private Chats. Nachrichten sind nicht Ende-zu-Ende-verschlüsselt; Personen mit direktem Serverzugriff könnten sie technisch lesen.</li><li><strong>Extras und Kontrolle</strong>Texte, Chat-Textnachrichten und Extras-Dokumente haben keine automatische Sieben-Tage-Frist. Eigene Beiträge lassen sich ausblenden/löschen, andere Personen blockieren und Inhalte melden. Eine vollständige Kontolöschung und Passwortwiederherstellung sind noch nicht eingebaut.</li><li><strong>Virtuelle Punkte</strong>Neue öffentliche Fotos kosten beim Hochladen den Kategorienpreis und beim Freischalten einmalig denselben Preis. Die Hälfte jeder Freischaltung erhält die hochladende Person. Chat-Fotos, Kategorien und Chatspiele kosten nichts. Es gibt keine Echtgeldzahlung.</li></ul><p>Verschwindende Fotos verhindern keine Screenshots oder externen Kopien. Verwende im Test keine vertraulichen Inhalte. Betreiberinformationen und das vollständige Sicherungs-/Löschkonzept müssen vor einem breiten öffentlichen Einsatz noch vervollständigt werden.</p>`, 'privacy');
 }
 
 document.addEventListener('submit', async e => {

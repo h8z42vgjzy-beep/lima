@@ -6,7 +6,7 @@ const button=document.getElementById('install-app');
 function update(){if(button)button.textContent=installed()?'App ist installiert ✓':'Als App installieren ↗';}
 window.addEventListener('beforeinstallprompt',event=>{event.preventDefault();installPrompt=event;update();});
 window.addEventListener('appinstalled',()=>{installPrompt=null;update();});
-const banner=document.createElement('div');banner.className='pwa-banner';banner.setAttribute('role','status');banner.hidden=navigator.onLine;banner.textContent='Keine Internetverbindung. Feed, Chats und Spiele sind gerade nicht verfügbar.';document.body.append(banner);
+const banner=document.createElement('div');banner.className='pwa-banner';banner.setAttribute('role','status');banner.hidden=navigator.onLine;banner.textContent=globalThis.fTranslate?.('Keine Internetverbindung. Senden, Öffnen und Multiplayer brauchen eine Verbindung.')||'Keine Internetverbindung. Senden, Öffnen und Multiplayer brauchen eine Verbindung.';document.body.append(banner);
 window.addEventListener('offline',()=>{banner.hidden=false;});window.addEventListener('online',()=>{banner.hidden=true;});
 button?.addEventListener('click',async()=>{
  if(installed()){if(typeof toast==='function')toast('Du nutzt bereits die installierte App.');return;}
@@ -18,6 +18,6 @@ button?.addEventListener('click',async()=>{
  for(const text of steps){const li=document.createElement('li');li.textContent=text;dialog.querySelector('ol').append(li);}
  const close=()=>{dialog.close();dialog.remove();button?.focus();};dialog.querySelector('button').addEventListener('click',close);dialog.addEventListener('cancel',e=>{e.preventDefault();close();});document.body.append(dialog);dialog.showModal();
 });
-if('serviceWorker' in navigator&&window.isSecureContext){navigator.serviceWorker.register('/sw.js',{scope:'/',updateViaCache:'none'}).then(registration=>registration.update()).catch(()=>{/* Website remains usable if registration is unsupported. */});}
+if('serviceWorker' in navigator&&window.isSecureContext){navigator.serviceWorker.register('/sw.js',{scope:'/',updateViaCache:'none'}).then(registration=>{registration.update();function offer(){if(!registration.waiting||!navigator.serviceWorker.controller)return;const notice=document.createElement('div');notice.className='pwa-banner';notice.textContent=globalThis.fTranslate?.('Update verfügbar. Neu laden?')||'Update verfügbar. Neu laden?';const reload=document.createElement('button');reload.className='mini-button';reload.textContent=globalThis.fTranslate?.('Neu laden')||'Neu laden';reload.onclick=()=>{navigator.serviceWorker.addEventListener('controllerchange',()=>location.reload(),{once:true});registration.waiting?.postMessage({type:'skip-waiting'});};notice.append(reload);document.body.append(notice);}offer();registration.addEventListener('updatefound',()=>registration.installing?.addEventListener('statechange',()=>{if(registration.installing?.state==='installed')offer();}));}).catch(()=>{/* Website remains usable if registration is unsupported. */});}
 update();
 })();

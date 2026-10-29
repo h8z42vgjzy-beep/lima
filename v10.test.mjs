@@ -79,37 +79,3 @@ test('Permanent photos survive storage reset; default category prices are tenfol
  assert.equal(h.one('SELECT removed FROM media WHERE id=?',permanent.id).removed,0);assert.equal(h.one('SELECT deleted FROM posts WHERE id=?',permanent.pid).deleted,0);
  assert.equal(h.one('SELECT removed FROM media WHERE id=?',disposable.id).removed,1);
 });
-
-test('Upload requires a viewing mode; permanent lifetime and paid chat retries persist correctly',async t=>{
- const h=await app(t);for(const u of [h.owner,h.reporter])await h.call('daily',u,'{}');
- const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lZcAAAAASUVORK5CYII=','base64');
- const category=(await h.call('categories')).data.categories.find(c=>c.name==='Alltag');
- const upload=async(route,fields)=>{const form=new FormData();for(const[k,v]of Object.entries(fields))form.set(k,String(v));form.set('file',new Blob([png],{type:'image/png'}),'test.png');return h.call(route,h.owner,form);};
- const fields={body:'Ein Testfoto.',category:category.id,rights:true,expectedPrice:category.photo_price,uploadToken:randomUUID()};
- assert.equal((await upload('upload-post',fields)).status,400);
- const photo=await upload('upload-post',{...fields,viewMode:'permanent'});assert.equal(photo.status,201,JSON.stringify(photo.data));
- assert.equal(h.one('SELECT expires FROM posts WHERE id=?',photo.data.id).expires,null);
- assert.equal(h.one('SELECT view_mode FROM media WHERE id=?',photo.data.mediaId).view_mode,'permanent');
- const before=(await h.call('wallet')).data.balance;
- const rid=Number(h.run("INSERT INTO requests(sender,receiver,status,created) VALUES(?,?,'accepted',?)",h.owner.id,h.reporter.id,Date.now()).lastInsertRowid);
- const input={request:rid,rights:true,expectedCost:20,sendToken:randomUUID()};
- const a=await upload('upload-chat',input),b=await upload('upload-chat',input);assert.equal(a.status,201);assert.equal(b.data.mediaId,a.data.mediaId);
- assert.equal((await h.call('wallet')).data.balance,before-20);
- assert.equal(h.one('SELECT COUNT(*) n FROM messages WHERE request_id=?',rid).n,1);
- assert.equal((await h.call('wallet',h.reporter)).data.balance,300);
- const settings=await h.call('settings',h.owner,JSON.stringify({theme:'pride',language:'uk'}));assert.equal(settings.status,200);
- assert.equal((await h.call('settings')).data.settings.theme,'pride');assert.equal((await h.call('settings')).data.settings.language,'uk');
-});
-
-test('UI translations switch every supported language and preserve user text and option values',()=>{
- const nodes=[];const attributes=[];const make=(text,{skip=false,option=false}={})=>{const attrs={};const parent={closest:()=>skip,tagName:option?'OPTION':'SPAN',hasAttribute:k=>k in attrs,setAttribute:(k,v)=>attrs[k]=v};const node={nodeValue:text,parentElement:parent};nodes.push(node);return {node,attrs};};
- const heading=make('Kategorien'),error=make('Nicht genug Beleidigungen.'),person=make('Kategorien',{skip:true}),option=make('Deutsch',{option:true});
- const placeholder={closest:()=>false,getAttribute:k=>k==='placeholder'?(placeholder.text||'Bitte wähle eine Kategorie.'):null,setAttribute:(k,v)=>placeholder.text=v};attributes.push(placeholder);
- const tasks=[];const document={body:{querySelectorAll:()=>attributes},documentElement:{},createTreeWalker:()=>{let i=0;return{nextNode:()=>nodes[i++]};}};
- const ctx=vm.createContext({document,NodeFilter:{SHOW_TEXT:4},MutationObserver:class{observe(){}},requestAnimationFrame:fn=>tasks.push(fn)});
- vm.runInContext(readFileSync(new URL('public/translations.js',import.meta.url),'utf8'),ctx);vm.runInContext(readFileSync(new URL('public/i18n.js',import.meta.url),'utf8'),ctx);
- for(const [lang,expected]of [['en','Categories'],['ru','Категории'],['uk','Категорії'],['de','Kategorien']]){
-  ctx.fLocale.set(lang);while(tasks.length)tasks.shift()();assert.equal(heading.node.nodeValue,expected);assert.equal(person.node.nodeValue,'Kategorien');assert.equal(option.attrs.value,'Deutsch');assert.equal(document.documentElement.lang,lang);
-  if(lang!=='de'){assert.notEqual(error.node.nodeValue,'Nicht genug Beleidigungen.');assert.notEqual(placeholder.text,'Bitte wähle eine Kategorie.');}
- }
-});

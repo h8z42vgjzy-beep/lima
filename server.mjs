@@ -1,3 +1,8 @@
+import {createStudio} from './studio.mjs';
+import {optimizeMedia} from './media-optimize.mjs';
+import {brotliCompressSync,gzipSync} from 'node:zlib';
+import {createMessageDeletion} from './message-delete.mjs';
+import {handleChatRepair} from './chat-repair.mjs';
 import { createActivity } from './activity.mjs';
 import http from 'node:http';
 import { DatabaseSync } from 'node:sqlite';
@@ -18,7 +23,7 @@ const root = path.dirname(fileURLToPath(import.meta.url));
 const staticCandidates = [path.join(root, 'public'), root];
 // A complete new client takes priority over an old copy in the other layout.
 const staticRoot = staticCandidates.filter(directory => {
-  return ['index.html','i18n.js','translations.js','music-player.js','dino-client.js','discovery-effects.js','reset-animation.js','reset-audio.js','reset-soundtrack.mp3','reset-film.mp4','manifest.webmanifest','sw.js','pwa.js','pwa.css','moderation-notices.js','moderation-notices.css','activity-ui.js','activity.css','reset-live.js','reset-animation.css','action.css','features.js','app.js'].every(file=>existsSync(path.join(directory,file)));
+  return ['index.html','music-player.js','dino-client.js','discovery-effects.js','reset-animation.js','reset-audio.js','reset-soundtrack.mp3','reset-film.mp4','manifest.webmanifest','sw.js','pwa.js','pwa.css','moderation-notices.js','moderation-notices.css','activity-ui.js','activity.css','reset-live.js','reset-animation.css','action.css','features.js','app.js'].every(file=>existsSync(path.join(directory,file)));
 }).sort((a,b)=>{
   const version=directory=>Number(readFileSync(path.join(directory,'index.html'),'utf8').match(/name="f-release" content="([0-9.]+)"/)?.[1]||0);
   return version(b)-version(a);
@@ -120,8 +125,9 @@ const blocked=(a,b)=>!!one('SELECT 1 FROM blocks WHERE (user_id=? AND target=?) 
 function chatAccess(user,rid){const r=one('SELECT * FROM requests WHERE id=?',rid);if(!user||!r||r.status!=='accepted'||![r.sender,r.receiver].includes(user.id)||blocked(r.sender,r.receiver))throw [403,'Dieser Chat ist nicht freigegeben.'];return r;}
 function postAccess(uid,pid){const p=one('SELECT * FROM posts WHERE id=? AND deleted=0 AND (expires IS NULL OR expires>?)',pid,now());if(!p||blocked(uid,p.user_id))throw [404,'Dieser Beitrag ist nicht mehr verfügbar.'];return p;}
 const activity=await createActivity({db,one,all,run,now,dataDir,blocked,ledger,transact});
-const games=createGameService({db,one,all,run,now,chatAccess});
-const dino=createDinoService({one,run,now,chatAccess,assertAvailable(g){
+const games=createGameService({db,one,all,run,now,chatAccess,onResult:g=>studio.recordGame(g)});
+const studio=createStudio({db,one,all,run,transact,now,blocked,activity});
+const dino=createDinoService({one,run,now,chatAccess,onResult:g=>studio.recordGame(g),assertAvailable(g){
   for(const id of [g.creator,g.opponent]){const u=one('SELECT * FROM users WHERE id=?',id);if(!u)throw [403,'Konto nicht verfügbar.'];requireActive(u);chatAccess(u,g.request_id);}
 }});
 const extras=createExtrasService({dataDir,one,all,run,transact,now,postAccess});
@@ -146,7 +152,7 @@ function reportAllowsMedia(r,m){if(r.target_type==='media')return r.target_id===
 const resetService=createResetService({all,one,run,transact,now,storageInfo,removeMedia,cleanupExpired,reportAllowsMedia});
 function checkStorage(){try{return resetService.check();}catch(e){console.error('Speicherbereinigung fehlgeschlagen:',e);return null;}}
 function saveMedia(owner,file,{postId=null,requestId=null,price=0,viewMode='legacy'}){const {kind,mime}=validateMedia(file);const name=fileNameFor(file);try{writeFileSync(path.join(mediaDir,name),file.data,{mode:0o600,flag:'wx'});const id=run('INSERT INTO media(owner_id,post_id,request_id,file_name,original_name,mime,kind,bytes,created,expires,open_price,view_mode) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',owner.id,postId,requestId,name,file.name.slice(0,150),mime,kind,file.data.length,now(),viewMode==='permanent'?8640000000000000:now()+28*DAY,price,viewMode).lastInsertRowid;return Number(id);}catch(e){try{unlinkSync(path.join(mediaDir,name));}catch{}throw e;}}
-function mediaAccess(user,id){if(!user)throw [401,'Bitte melde dich zum Öffnen an.'];const m=one('SELECT * FROM media WHERE id=? AND removed=0',id);if(!m||m.expires<=now())throw [410,'Diese Datei ist nicht mehr verfügbar.'];if(blocked(user.id,m.owner_id))throw [404,'Diese Datei ist nicht verfügbar.'];if(m.request_id){chatAccess(user,m.request_id);if(now()>=m.created+7*DAY)throw [410,'Dieses Chat-Foto ist abgelaufen.'];}else if(m.post_id)postAccess(user.id,m.post_id);else throw [404,'Datei nicht gefunden.'];return m;}
+function mediaAccess(user,id){if(!user)throw [401,'Bitte melde dich zum Öffnen an.'];const m=one('SELECT * FROM media WHERE id=? AND removed=0',id);if(!m||m.expires<=now())throw [410,'Diese Datei ist nicht mehr verfügbar.'];if(blocked(user.id,m.owner_id))throw [404,'Diese Datei ist nicht verfügbar.'];if(m.request_id){chatAccess(user,m.request_id);if(now()>=m.created+28*DAY)throw [410,'Dieses Chat-Foto ist abgelaufen.'];}else if(m.post_id)postAccess(user.id,m.post_id);else throw [404,'Datei nicht gefunden.'];return m;}
 function mediaContent(m){try{return readFileSync(path.join(mediaDir,m.file_name));}catch{throw [410,'Die Bilddatei ist nicht mehr vorhanden. Es wurde nichts abgebucht.'];}}
 function sendMedia(req,res,m,{directory=mediaDir,cache='private, no-store, max-age=0'}={}){const full=path.join(directory,m.file_name);let size;try{size=statSync(full).size;}catch{throw [410,'Diese Datei ist nicht mehr vorhanden.'];}const headers={'Content-Type':m.mime,'Cache-Control':cache,'Accept-Ranges':'bytes'};const range=req.headers.range;let start=0,end=size-1,status=200;if(range){const match=/^bytes=(\d*)-(\d*)$/.exec(range);if(!match||(!match[1]&&!match[2]))throw [416,'Ungültiger Dateibereich.'];if(!match[1])start=Math.max(0,size-Number(match[2]));else start=Number(match[1]);if(match[1]&&match[2])end=Math.min(size-1,Number(match[2]));if(!Number.isSafeInteger(start)||!Number.isSafeInteger(end)||start>end||start>=size)throw [416,'Ungültiger Dateibereich.'];headers['Content-Range']=`bytes ${start}-${end}/${size}`;status=206;}headers['Content-Length']=end-start+1;res.writeHead(status,headers);if(req.method==='HEAD')return res.end();const stream=createReadStream(full,{start,end});stream.on('error',()=>res.destroy());res.on('close',()=>stream.destroy());stream.pipe(res);}
 const staticFiles={'/':['index.html','text/html; charset=utf-8'],'/app.js':['app.js','text/javascript; charset=utf-8'],'/style.css':['style.css','text/css; charset=utf-8'],'/night.css':['night.css','text/css; charset=utf-8'],'/favicon.svg':['favicon.svg','image/svg+xml']};
@@ -164,6 +170,14 @@ for(const name of ['reset-animation.js','reset-audio.js','activity-ui.js','activ
 for(const [name,mime] of [['manifest.webmanifest','application/manifest+json'],['sw.js','text/javascript; charset=utf-8'],['pwa.js','text/javascript; charset=utf-8'],['pwa.css','text/css; charset=utf-8'],['moderation-notices.js','text/javascript; charset=utf-8'],['moderation-notices.css','text/css; charset=utf-8'],['offline.html','text/html; charset=utf-8'],...['app-icon-192.png','app-icon-512.png','app-icon-maskable.png','apple-touch-icon.png'].map(name=>[name,'image/png'])])staticFiles['/'+name]=[name,mime];
 staticFiles['/reset-film.mp4']=['reset-film.mp4','video/mp4'];
 staticFiles['/reset-soundtrack.mp3']=['reset-soundtrack.mp3','audio/mpeg'];
+const assetCache=new Map();
+for(const name of ['offline.js','studio.js','media-client.js','design-system.css','theme-boot.js','studio-translations.js'])staticFiles['/'+name]=[name,name.endsWith('.css')?'text/css; charset=utf-8':'text/javascript; charset=utf-8'];
+for(const name of ['night','pride','forest','ice'])staticFiles['/art/'+name+'.webp']=['art/'+name+'.webp','image/webp'];
+for(const name of ['night','pride','forest','ice','dino','chess','arcade'])staticFiles['/art/'+name+'.svg']=['art/'+name+'.svg','image/svg+xml'];
+// MESSAGE-DELETE-1
+const messageDeletion=createMessageDeletion({db,one,run,transact,now,chatAccess});
+staticFiles['/message-delete-client.js']=['message-delete-client.js','text/javascript; charset=utf-8'];
+staticFiles['/message-delete.css']=['message-delete.css','text/css; charset=utf-8'];
 const server=http.createServer(async(req,res)=>{
   res.setHeader('X-Content-Type-Options','nosniff');
   res.setHeader('Referrer-Policy','same-origin');
@@ -185,21 +199,42 @@ const server=http.createServer(async(req,res)=>{
       }
       const item=staticFiles[url.pathname];if(!item||!['GET','HEAD'].includes(req.method)){res.writeHead(404);return res.end('Nicht gefunden.');}
       if(['reset-soundtrack.mp3','reset-film.mp4'].includes(item[0]))return sendMedia(req,res,{file_name:item[0],mime:item[1]},{directory:staticRoot,cache:'no-cache'});
-      res.writeHead(200,{'Content-Type':item[1],'Cache-Control':'no-cache'});return res.end(req.method==='HEAD'?'':readFileSync(path.join(staticRoot,item[0])));
+      const full=path.join(staticRoot,item[0]),mtime=statSync(full).mtimeMs;
+      let asset=assetCache.get(full);if(!asset||asset.mtime!==mtime){const bytes=readFileSync(full);asset={mtime,bytes,etag:'"'+digest(bytes).slice(0,24)+'"'};assetCache.set(full,asset);}
+      const headers={'Content-Type':item[1],'Cache-Control':'no-cache','ETag':asset.etag,'Vary':'Accept-Encoding'};
+      if(req.headers['if-none-match']===asset.etag){res.writeHead(304,headers);return res.end();}
+      let bytes=asset.bytes;
+      if(bytes.length>1024&&/text|javascript|json|svg/.test(item[1])){const accept=req.headers['accept-encoding']||'';if(/\bbr\b/.test(accept)){asset.br??=brotliCompressSync(bytes);bytes=asset.br;headers['Content-Encoding']='br';}else if(/\bgzip\b/.test(accept)){asset.gz??=gzipSync(bytes);bytes=asset.gz;headers['Content-Encoding']='gzip';}}
+      headers['Content-Length']=bytes.length;res.writeHead(200,headers);return res.end(req.method==='HEAD'?'':bytes);
     }
     const route=url.pathname.slice(5);
     if(req.method==='GET'){
+      if(route==='chat-repair-status')return send(200,{active:true,repair:'chat-repair-2',version:2});
+      if(route==='design-status')return send(200,{active:true,version:'feindschaft-11',schema:11,themes:['night','pride','forest','ice'],features:['achievements','leaderboards','feedback','onboarding','dashboard','message-delete','chat-repair','media-optimization'],location:false});
+      if(route==='message-delete-status')return send(200,{active:true,version:'message-delete-1'});
       if(route==='me')return send(200,{user:safeUser(user)});
       if(route==='feed')return send(200,{posts:feedRows(user?.id||0),members:one('SELECT COUNT(*) AS n FROM users WHERE demo=0').n});
       if(route==='categories')return send(200,{categories:all('SELECT c.*,u.name AS creator_name FROM categories c LEFT JOIN users u ON u.id=c.creator ORDER BY c.name COLLATE NOCASE').map(c=>({...c,photo_price:photoPrice(c)}))});
       if(route==='event')return send(200,{event:null}); // Old clients must never replay a reset.
       if(route==='reset-stream')return resetService.stream(req,res,user);
       if(!user)throw [401,'Melde dich an, um mitzumachen.'];
+      if(route==='studio/overview')return send(200,studio.overview(user));
+      if(route==='studio/leaderboard')return send(200,studio.leaderboard(user,url.searchParams.get('kind')||'wins'));
+      if(route==='studio/profile')return send(200,studio.publicProfile(user,idField(Object.fromEntries(url.searchParams),'id')));
+      if(route==='studio/admin-feedback')return send(200,studio.adminFeedback(user));
       if(route==='moderation/notices')return send(200,{notices:all('SELECT id,action,body,fine_percent,fine_amount,created,read_at FROM moderation_notices WHERE user_id=? ORDER BY id DESC LIMIT 100',user.id)});
-      if(route==='settings')return send(200,{settings:activity.settings(user.id),push:activity.config(),progress:activity.progress(user.id)});
+      if(route==='studio/preferences')return send(200,{preferences:studio.save(user,b)});
+    if(route==='studio/ack-achievements')return send(200,studio.acknowledge(user,b));
+    if(route==='studio/feedback'){rate('feedback:'+user.id,5);return send(201,studio.feedback(user,b));}
+    if(route==='studio/admin-feedback')return send(200,studio.adminFeedback(user,b));
+    if(route==='settings')return send(200,{settings:activity.settings(user.id),push:activity.config(),progress:activity.progress(user.id)});
       if(route==='notifications')return send(200,{notices:activity.list(user.id)});
-      if(route==='wallet')return send(200,{...wallet(user.id),entries:all('SELECT description,amount_half/2.0 AS amount,created FROM wallet_entries WHERE user_id=? ORDER BY id DESC LIMIT 50',user.id)});
-      if(route==='games')return send(200,games.list(user,idField(Object.fromEntries(url.searchParams),'request')));
+      if(route==='wallet')return send(200,{...wallet(user.id),entries:all(`SELECT description,amount,created,origin FROM (
+        SELECT description,amount_half/2.0 AS amount,created,'transaction' AS origin,id AS tie FROM wallet_entries WHERE user_id=?
+        UNION ALL SELECT CASE WHEN amount>0 THEN 'Tagespunkte abgeholt' ELSE 'Moderationsentscheidung' END,amount,created,'daily',rowid FROM daily_claims WHERE user_id=?
+        UNION ALL SELECT CASE WHEN value=1 THEN 'Like erhalten' ELSE 'Dislike erhalten' END,CASE WHEN value=1 THEN 2 ELSE -5 END,created,'reaction',rowid FROM reactions WHERE owner_id=?
+      ) ORDER BY created DESC,tie DESC LIMIT 100`,user.id,user.id,user.id)});
+      if(route==='games'){const request=idField(Object.fromEntries(url.searchParams),'request'),result=games.list(user,request);run("UPDATE activity_notices SET read_at=? WHERE user_id=? AND target=? AND type IN('invitations','chess') AND read_at IS NULL",now(),user.id,request);return send(200,result);}
       if(route==='dino-stream'){
         requireActive(user);
         return dino.stream(user,idField(Object.fromEntries(url.searchParams),'game'),req,res,()=>!!one('SELECT 1 FROM sessions WHERE token=? AND expires>?',digest(cookie),now()));
@@ -215,6 +250,7 @@ const server=http.createServer(async(req,res)=>{
         if(!user.is_admin)throw [403,'Nur für die Moderation.'];const id=idField(Object.fromEntries(url.searchParams),'id');const r=one('SELECT * FROM reports WHERE id=?',id);if(!r)throw [404,'Meldung nicht gefunden.'];let conversation=[];
         if(r.target_type==='user'){conversation=all(`SELECT m.*,u.name FROM messages m JOIN users u ON u.id=m.sender JOIN requests q ON q.id=m.request_id WHERE (q.sender=? AND q.receiver=?) OR (q.sender=? AND q.receiver=?) ORDER BY m.created DESC LIMIT 500`,r.reporter,r.target_id,r.target_id,r.reporter);}
         if(r.target_type==='message'){const message=one('SELECT m.*,u.name FROM messages m JOIN users u ON u.id=m.sender WHERE m.id=?',r.target_id);if(message)conversation=[message];}
+        conversation=conversation.map(m=>{if(m.deleted){const evidence=messageDeletion.evidence(m.id);if(evidence)return {...m,body:evidence.body};}return m;});
         const content=r.target_type==='post'?one('SELECT id,body,title,category,user_id FROM posts WHERE id=?',r.target_id):r.target_type==='comment'?one('SELECT id,body,user_id FROM comments WHERE id=?',r.target_id):null;
         const media=all('SELECT * FROM media WHERE removed=0 AND expires>?',now()).filter(m=>reportAllowsMedia(r,m)).map(m=>({id:m.id,kind:m.kind,created:m.created,url:`/api/admin/media?report=${r.id}&media=${m.id}`}));
         return send(200,{report:r,conversation,content,media});
@@ -232,7 +268,8 @@ const server=http.createServer(async(req,res)=>{
       if(route==='messages'){
         const rid=idField(Object.fromEntries(url.searchParams),'request');const r=one('SELECT * FROM requests WHERE id=?',rid);
         if(!r||r.status!=='accepted'||![r.sender,r.receiver].includes(user.id)||blocked(r.sender,r.receiver))throw [403,'Dieser Chat ist nicht freigegeben.'];
-        return send(200,{messages:all('SELECT id,sender,body,created,media_id FROM (SELECT * FROM messages WHERE request_id=? AND deleted=0 ORDER BY id DESC LIMIT 500) ORDER BY id',rid).map(m=>{const photo=m.media_id?one('SELECT * FROM media WHERE id=?',m.media_id):null;return {...m,mediaId:m.media_id,photoState:!m.media_id?null:!photo||photo.removed||photo.expires<=now()||photo.created+7*DAY<=now()?'expired':photo.owner_id===user.id?'own':photo.opened_at?'opened':'ready'};})});
+        run("UPDATE activity_notices SET read_at=? WHERE user_id=? AND target=? AND type='messages' AND read_at IS NULL",now(),user.id,rid);
+        return send(200,{messages:all('SELECT id,sender,body,created,media_id FROM (SELECT * FROM messages WHERE request_id=? AND deleted=0 AND NOT EXISTS(SELECT 1 FROM hidden_messages hm WHERE hm.message_id=messages.id AND hm.user_id=?) ORDER BY id DESC LIMIT 500) ORDER BY id',rid,user.id).map(m=>{const photo=m.media_id?one('SELECT * FROM media WHERE id=?',m.media_id):null;return {...m,mediaId:m.media_id,photoState:!m.media_id?null:!photo||photo.removed||photo.expires<=now()||photo.created+28*DAY<=now()?'expired':photo.owner_id===user.id?'own':photo.opened_at?'opened':'ready'};})});
       }
       if(route==='member'){
         const target=idField(Object.fromEntries(url.searchParams),'id');const other=one('SELECT * FROM users WHERE id=?',target);
@@ -259,7 +296,7 @@ const server=http.createServer(async(req,res)=>{
       if(uploadInProgress)throw [429,'Gerade läuft ein weiterer Upload. Bitte versuche es in einigen Sekunden erneut.'];
       let parsed;uploadInProgress=true;
       try{parsed=parseMultipart(await rawBody(req,route==='upload-extra'?11*1024**2:105*1024**2),contentType);}finally{uploadInProgress=false;}
-      const file=parsed.files.find(x=>x.field==='file');if(!file||parsed.files.length!==1)throw [400,'Bitte wähle genau eine Datei aus.'];
+      let file=parsed.files.find(x=>x.field==='file');if(!file||parsed.files.length!==1)throw [400,'Bitte wähle genau eine Datei aus.'];
       if(parsed.fields.rights!=='true')throw [400,'Bitte bestätige, dass du die Rechte an der Datei hast.'];
       if(route==='upload-extra'){reserveStorage(file.data.length);const result=extras.create(user,parsed.fields,file);checkStorage();return send(201,result);}
       const info=validateMedia(file);
@@ -271,18 +308,22 @@ const server=http.createServer(async(req,res)=>{
         const price=info.kind==='image'?photoPrice(category):0;
         const viewMode=info.kind==='image'?parsed.fields.viewMode:'legacy';if(info.kind==='image'&&!['once','permanent'].includes(viewMode))throw [400,'Bitte wähle 20 Sekunden oder dauerhaft für das Foto.'];
         if(Number(parsed.fields.expectedPrice)!==price)throw [409,'Der Preis ist nicht bestätigt oder wurde geändert. Bitte prüfe den Kategorienpreis erneut.'];
+        file=await optimizeMedia(file,info.kind);
         let savedPath;
         try{const result=transact(()=>{
           if(price>0&&wallet(user.id).balance<price)throw [400,'Nicht genug Beleidigungen für den Foto-Upload. Hole zuerst deine Tagespunkte ab.'];
-          const id=Number(run('INSERT INTO posts(user_id,body,category,created,expires) VALUES(?,?,?,?,?)',user.id,content,category.name,now(),viewMode==='permanent'?null:now()+7*DAY).lastInsertRowid);
+          const id=Number(run('INSERT INTO posts(user_id,body,category,created,expires) VALUES(?,?,?,?,?)',user.id,content,category.name,now(),viewMode==='permanent'?null:now()+28*DAY).lastInsertRowid);
           const mediaId=saveMedia(user,file,{postId:id,price,viewMode});savedPath=path.join(mediaDir,one('SELECT file_name FROM media WHERE id=?',mediaId).file_name);
           if(price)ledger(user.id,'upload:'+mediaId,-price,'Foto hochgeladen · '+category.name);
           run('INSERT INTO upload_receipts(user_id,token,post_id,media_id) VALUES(?,?,?,?)',user.id,token,id,mediaId);
-          return {id,mediaId,charged:price,user:safeUser(user)};
+          studio.reconcile(user.id);return {id,mediaId,charged:price,user:safeUser(user)};
         });checkStorage();return send(201,result);}catch(e){if(savedPath){try{unlinkSync(savedPath);}catch{}}throw e;}
       }
       const rid=Number(parsed.fields.request);const r=one('SELECT * FROM requests WHERE id=?',rid);if(!r||r.status!=='accepted'||![r.sender,r.receiver].includes(user.id)||blocked(r.sender,r.receiver))throw [403,'Dieser Chat ist nicht freigegeben.'];
       if(info.kind!=='image')throw [400,'Im Chat sind nur Bilder erlaubt.'];
+      const receipt=one('SELECT result FROM paid_receipts WHERE user_id=? AND kind=? AND token=?',user.id,'chat-photo',parsed.fields.sendToken);
+      if(receipt)return send(200,JSON.parse(receipt.result));
+      file=await optimizeMedia(file,info.kind);
       let chatFile;
       try{const result=paidAction(user.id,'chat-photo',parsed.fields.sendToken,()=>{debit(user.id,20,'chat-photo:'+user.id+':'+parsed.fields.sendToken,'Chat-Foto gesendet',parsed.fields.expectedCost);const mediaId=saveMedia(user,file,{requestId:rid,price:0});chatFile=path.join(mediaDir,one('SELECT file_name FROM media WHERE id=?',mediaId).file_name);run('INSERT INTO messages(request_id,sender,body,created,media_id) VALUES(?,?,?,?,?)',rid,user.id,'[Foto:'+mediaId+']',now(),mediaId);return {mediaId};});activity.notify(r.sender===user.id?r.receiver:r.sender,user.id,'messages',rid,'photo:'+result.mediaId);checkStorage();return send(201,result);}catch(e){if(chatFile){try{unlinkSync(chatFile);}catch{}}throw e;}
     }
@@ -301,6 +342,7 @@ const server=http.createServer(async(req,res)=>{
         const salt=randomBytes(16).toString('hex');const key=await derive(password,salt,64);
         try{run('INSERT INTO users(name,hash,color,created,gender,orientation,queer,identity_visible) VALUES(?,?,?,?,?,?,?,?)',name,salt+':'+key.toString('hex'),colors[Math.floor(Math.random()*colors.length)],now(),profile.gender,profile.orientation,profile.queer,profile.identityVisible?1:0);}catch(e){if(e.code?.includes('CONSTRAINT')||e.message.includes('UNIQUE'))throw [409,'Dieser Name ist schon vergeben.'];throw e;}
         u=one('SELECT * FROM users WHERE name=?',name);
+        if(['de','en','ru','uk'].includes(b.language)||['night','pride','forest','ice'].includes(b.theme))activity.save(u.id,{...(['de','en','ru','uk'].includes(b.language)?{language:b.language}:{}),...(['night','pride','forest','ice'].includes(b.theme)?{theme:b.theme}:{})});
       }else{
         const salt=u?.hash?.split(':')[0]||'invalid-salt';const expected=u?.hash?.split(':')[1];const key=await derive(password,salt,64);
         if(!expected||!timingSafeEqual(key,Buffer.from(expected,'hex')))throw [401,'Name oder Passwort stimmen nicht.'];
@@ -311,6 +353,10 @@ const server=http.createServer(async(req,res)=>{
       return send(200,{user:safeUser(u)});
     }
     if(!user)throw [401,'Melde dich an, um mitzumachen.'];
+    if(route==='studio/preferences')return send(200,{preferences:studio.save(user,b)});
+    if(route==='studio/ack-achievements')return send(200,studio.acknowledge(user,b));
+    if(route==='studio/feedback'){rate('feedback:'+user.id,5);return send(201,studio.feedback(user,b));}
+    if(route==='studio/admin-feedback')return send(200,studio.adminFeedback(user,b));
     if(route==='settings')return send(200,{settings:activity.save(user.id,b)});
     if(route==='notifications/read'){activity.read(user.id,idField(b,'id'));return send(200,{ok:true});}
     if(route==='push/status')return send(200,{device:activity.status(user.id,String(b.endpoint))});
@@ -321,7 +367,7 @@ const server=http.createServer(async(req,res)=>{
     if(route==='dino-jump'){requireActive(user);rate('dino-jump:'+user.id,12,1000);idField(b,'game');return send(200,dino.jump(user,b));}
     rate('write:'+user.id,45);
     if(route==='extra')return send(201,extras.create(user,b));
-    if(route==='game-create'){const result=paidAction(user.id,'game-create',b.sendToken,()=>{const created=games.create(user,idField(b,'request'),b.type);debit(user.id,5,'game-create:'+user.id+':'+b.sendToken,'Spiel erstellt',b.expectedCost);return created;});const g=result.game;activity.notify(g.opponent,user.id,'invitations',g.request_id,'invite:'+g.id);return send(201,result);}
+    if(route==='game-create'){const result=paidAction(user.id,'game-create',b.sendToken,()=>{debit(user.id,5,'game-create:'+user.id+':'+b.sendToken,'Spiel erstellt',b.expectedCost);return games.create(user,idField(b,'request'),b.type);});const g=result.game;activity.notify(g.opponent,user.id,'invitations',g.request_id,'invite:'+g.id);return send(201,result);}
     if(route==='game-action'){idField(b,'game');const result=transact(()=>{const result=games.action(user,b);if(b.action==='accept')debit(user.id,5,'game-accept:'+b.game,'Spieleinladung angenommen',b.expectedCost);return result;}),g=result.game;if(g.type==='chess'&&['move','accept','resign'].includes(b.action))activity.notify(g.creator===user.id?g.opponent:g.creator,user.id,'chess',g.request_id,'chess:'+g.id+':'+g.version);return send(200,result);}
     if(route==='chat-photo-open'){
       const m=mediaAccess(user,idField(b,'media'));if(!m.request_id||m.kind!=='image')throw [400,'Kein Chat-Foto.'];
@@ -331,6 +377,7 @@ const server=http.createServer(async(req,res)=>{
       transact(()=>{if(one('SELECT opened_at FROM media WHERE id=?',m.id).opened_at)throw [410,'Dieses Foto wurde schon geöffnet und kann nicht erneut geöffnet werden.'];run('UPDATE media SET opened_at=? WHERE id=?',now(),m.id);run('INSERT INTO photo_views(media_id,user_id,token,expires) VALUES(?,?,?,?)',m.id,user.id,digest(token),ends);});
       return send(200,{url:`/media/${m.id}?view=${token}`,expires:ends,serverNow:now()});
     }
+    if(route==='message-delete'){rate('message-delete:'+user.id,60);return send(200,messageDeletion.remove(user,b));}
     if(route==='logout'){if(cookie)run('DELETE FROM push_devices WHERE session=?',digest(cookie));if(cookie)run('DELETE FROM sessions WHERE token=?',digest(cookie));res.setHeader('Set-Cookie','f_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0');return send(200,{ok:true});}
     if(route==='profile-update'){
       const fields=profileFields(b);run('UPDATE users SET gender=?,orientation=?,queer=?,identity_visible=? WHERE id=?',fields.gender,fields.orientation,fields.queer,fields.identityVisible?1:0,user.id);return send(200,{user:safeUser(one('SELECT * FROM users WHERE id=?',user.id))});
@@ -422,11 +469,13 @@ const server=http.createServer(async(req,res)=>{
       if(target.user_id===user.id)throw [400,'Eigene Beiträge kannst du nicht bewerten.'];
       if(b.value===0)run('DELETE FROM reactions WHERE user_id=? AND kind=? AND target_id=?',user.id,b.kind,id);
       else run(`INSERT INTO reactions(user_id,kind,target_id,owner_id,value,created) VALUES(?,?,?,?,?,?) ON CONFLICT(user_id,kind,target_id) DO UPDATE SET value=excluded.value,created=excluded.created`,user.id,b.kind,id,target.user_id,b.value,now());
+      studio.reconcile(target.user_id);
+      if(b.value!==0)activity.notify(target.user_id,user.id,'reactions',b.kind==='post'?id:target.post_id,'reaction:'+user.id+':'+b.kind+':'+id);
       return send(200,{...reactionStats(b.kind,id,user.id)});
     }
     if(route==='post'){
       rate('post:'+user.id,5);const content=textField(b,'body',3,280);const category=Number.isFinite(Number(b.category))?one('SELECT * FROM categories WHERE id=?',Number(b.category)):one('SELECT * FROM categories WHERE name=?',String(b.category||''));if(!category)throw [400,'Bitte wähle eine Kategorie.'];
-      const id=run('INSERT INTO posts(user_id,body,category,created,expires) VALUES(?,?,?,?,?)',user.id,content,category.name,now(),now()+7*DAY).lastInsertRowid;return send(201,{id:Number(id)});
+      const id=run('INSERT INTO posts(user_id,body,category,created,expires) VALUES(?,?,?,?,?)',user.id,content,category.name,now(),now()+28*DAY).lastInsertRowid;studio.reconcile(user.id);return send(201,{id:Number(id)});
     }
     if(['flower','save','hide','delete-post','comment'].includes(route)){
       const pid=idField(b,'post');const p=postAccess(user.id,pid);
@@ -449,16 +498,10 @@ const server=http.createServer(async(req,res)=>{
       if(user.trial_start)throw [409,'Deine kostenlose Probephase wurde bereits gestartet.'];
       run('UPDATE users SET trial_start=? WHERE id=?',now(),user.id);return send(200,{user:safeUser(one('SELECT * FROM users WHERE id=?',user.id))});
     }
-    if(route==='block'||route==='unblock'){
-      const target=idField(b,'target');if(target===user.id||!one('SELECT id FROM users WHERE id=?',target))throw [400,'Ungültige Person.'];
-      if(route==='block'){run('INSERT OR IGNORE INTO blocks VALUES(?,?)',user.id,target);run("UPDATE requests SET status='declined' WHERE (sender=? AND receiver=?) OR (sender=? AND receiver=?)",user.id,target,target,user.id);}else run('DELETE FROM blocks WHERE user_id=? AND target=?',user.id,target);
-      return send(200,{ok:true});
-    }
-    if(route==='request'){
-      rate('request:'+user.id,6);const target=idField(b,'target');const other=one('SELECT * FROM users WHERE id=? AND demo=0',target);
-      if(!other||target===user.id||blocked(user.id,target))throw [400,'Diese Chat-Anfrage ist nicht möglich.'];
-      if(one('SELECT id FROM requests WHERE (sender=? AND receiver=?) OR (sender=? AND receiver=?)',user.id,target,target,user.id))throw [409,'Zwischen euch gibt es bereits eine Anfrage.'];
-      transact(()=>{debit(user.id,200,'request:'+user.id+':'+target,'Chat-Anfrage gesendet',b.expectedCost);run('INSERT INTO requests(sender,receiver,created) VALUES(?,?,?)',user.id,target,now());});return send(201,{ok:true,user:safeUser(user)});
+    // FEINDSCHAFT-CHAT-REPAIR-2
+    if(['block','unblock','request'].includes(route)){
+      const result=handleChatRepair({route,user,b,idField,one,run,transact,rate,blocked,debit,now});
+      return send(result.status,result.data);
     }
     if(route==='respond'){
       const id=idField(b,'request');const r=one('SELECT * FROM requests WHERE id=?',id);

@@ -63,7 +63,7 @@ export function applyMove(type, original, mark, input) {
   return { state, won, draw: !won && state.board.every(Boolean) };
 }
 
-export function createGameService({ db, one, all, run, now, chatAccess }) {
+export function createGameService({ db, one, all, run, now, chatAccess, onResult=()=>{} }) {
   db.exec(`CREATE TABLE IF NOT EXISTS chat_games(
     id INTEGER PRIMARY KEY, request_id INTEGER NOT NULL REFERENCES requests(id) ON DELETE CASCADE,
     type TEXT NOT NULL, creator INTEGER NOT NULL REFERENCES users(id), opponent INTEGER NOT NULL REFERENCES users(id),
@@ -124,7 +124,8 @@ export function createGameService({ db, one, all, run, now, chatAccess }) {
         const next = applyMove(g.type, JSON.parse(g.state), g.creator === user.id ? 1 : 2, input);
         run('UPDATE chat_games SET state=?,status=?,winner=?,turn=?,version=version+1,updated=? WHERE id=?', JSON.stringify(next.state), next.won || next.draw ? 'finished' : 'active', next.won ? user.id : null, g.turn === g.creator ? g.opponent : g.creator, now(), g.id);
       } else throw [400, 'Ungültige Spielaktion.'];
-      return { game: expose(one('SELECT * FROM chat_games WHERE id=?', g.id),user.id) };
+      const result=one('SELECT * FROM chat_games WHERE id=?',g.id);onResult(result);
+      return {game:expose(result,user.id)};
     },
   };
 }
